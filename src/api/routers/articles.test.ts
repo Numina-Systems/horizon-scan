@@ -6,7 +6,6 @@ import {
   createTestCaller,
 } from "../../test-utils/db";
 import type { AppDatabase } from "../../db";
-import type { AppRouter } from "../router";
 
 describe("articles router", () => {
   let db: AppDatabase;
