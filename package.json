@@ -14,10 +14,16 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.42",
+    "@ai-sdk/google": "^3.0.26",
+    "@ai-sdk/openai": "^3.0.27",
+    "@ai-sdk/openai-compatible": "^2.0.29",
+    "ai": "^6.0.83",
     "better-sqlite3": "^11.0.0",
     "cheerio": "^1.2.0",
     "drizzle-orm": "^0.45.0",
     "node-cron": "^4.2.1",
+    "ollama-ai-provider-v2": "^3.3.0",
     "p-limit": "^5.0.0",
     "pino": "^10.0.0",
     "rss-parser": "^3.13.0",
