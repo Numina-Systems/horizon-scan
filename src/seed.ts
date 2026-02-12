@@ -1,3 +1,4 @@
+// pattern: Imperative Shell
 import type { Logger } from "pino";
 import type { AppDatabase } from "./db";
 import type { AppConfig } from "./config";
@@ -14,8 +15,7 @@ import { feeds, topics } from "./db/schema";
  * @param config - The application configuration containing feeds and topics.
  * @param logger - The logger instance for structured logging.
  *
- * Functional Core — performs pure database operations (idempotent and side-effect-free
- * in terms of business logic; side effects are confined to logging and DB writes).
+ * Imperative Shell — performs database writes for initial data seeding.
  */
 export function seedDatabase(
   db: AppDatabase,

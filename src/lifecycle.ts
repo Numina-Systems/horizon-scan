@@ -1,3 +1,4 @@
+// pattern: Imperative Shell
 import type { Logger } from "pino";
 
 /**

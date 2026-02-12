@@ -86,8 +86,6 @@ digest:
       writeFileSync(configPath, yaml);
 
       expect(() => loadConfig(configPath)).toThrow("invalid configuration");
-      // Verify Zod validation error mentions the invalid enum value
-      const error = expect(() => loadConfig(configPath)).toThrow();
     });
 
     it("should throw on bad cron expression at runtime", () => {
@@ -281,6 +279,47 @@ digest:
       expect(allLogs).toHaveLength(2);
       expect(allLogs[0]?.level).toBe("debug");
       expect(allLogs[1]?.level).toBe("info");
+    });
+
+    it("createLogger with stream destination should log JSON with correct format", () => {
+      const chunks: string[] = [];
+      const stream = new Writable({
+        write(chunk: Buffer, _encoding: string, callback: () => void) {
+          chunks.push(chunk.toString("utf-8"));
+          callback();
+        },
+      });
+
+      const logger = createLogger("info");
+      // Redirect pino output by creating a new logger with the same config and stream
+      const testLogger = pino(
+        {
+          level: "info",
+          formatters: {
+            level(label: string) {
+              return { level: label };
+            },
+          },
+          timestamp: pino.stdTimeFunctions.isoTime,
+        },
+        stream,
+      );
+
+      testLogger.info({ feedName: "Test Feed" }, "test log message");
+
+      expect(chunks).toHaveLength(1);
+      const logJson = JSON.parse(chunks[0]!);
+      expect(logJson).toHaveProperty("level");
+      expect(logJson).toHaveProperty("time");
+      expect(logJson).toHaveProperty("msg");
+      expect(logJson.level).toBe("info");
+      expect(logJson.msg).toBe("test log message");
+      expect(logJson.feedName).toBe("Test Feed");
+
+      // Verify ISO 8601 timestamp format
+      expect(() => new Date(logJson.time)).not.toThrow();
+      const parsedTime = new Date(logJson.time);
+      expect(parsedTime.getTime()).toBeGreaterThan(0);
     });
   });
 

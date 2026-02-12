@@ -20,8 +20,8 @@ describe("registerShutdownHandlers", () => {
   });
 
   it("should register SIGTERM and SIGINT handlers on process", () => {
-    const scheduler1Stop = vi.fn() as any;
-    const closeDb = vi.fn() as any;
+    const scheduler1Stop = vi.fn();
+    const closeDb = vi.fn();
 
     const deps: ShutdownDeps = {
       schedulers: [{ stop: scheduler1Stop }],
@@ -37,10 +37,10 @@ describe("registerShutdownHandlers", () => {
   });
 
   it("should call all scheduler stop() methods on SIGTERM", () => {
-    const scheduler1Stop = vi.fn() as any;
-    const scheduler2Stop = vi.fn() as any;
-    const scheduler3Stop = vi.fn() as any;
-    const closeDb = vi.fn() as any;
+    const scheduler1Stop = vi.fn();
+    const scheduler2Stop = vi.fn();
+    const scheduler3Stop = vi.fn();
+    const closeDb = vi.fn();
 
     const deps: ShutdownDeps = {
       schedulers: [
@@ -74,10 +74,10 @@ describe("registerShutdownHandlers", () => {
   });
 
   it("should call all scheduler stop() methods on SIGINT", () => {
-    const scheduler1Stop = vi.fn() as any;
-    const scheduler2Stop = vi.fn() as any;
-    const scheduler3Stop = vi.fn() as any;
-    const closeDb = vi.fn() as any;
+    const scheduler1Stop = vi.fn();
+    const scheduler2Stop = vi.fn();
+    const scheduler3Stop = vi.fn();
+    const closeDb = vi.fn();
 
     const deps: ShutdownDeps = {
       schedulers: [
@@ -115,11 +115,11 @@ describe("registerShutdownHandlers", () => {
 
     const schedulerStop = vi.fn(() => {
       callOrder.push("scheduler.stop");
-    }) as any;
+    });
 
     const closeDb = vi.fn(() => {
       callOrder.push("closeDb");
-    }) as any;
+    });
 
     const deps: ShutdownDeps = {
       schedulers: [{ stop: schedulerStop }],
@@ -144,8 +144,8 @@ describe("registerShutdownHandlers", () => {
   });
 
   it("should prevent double shutdown (re-entrant guard)", () => {
-    const scheduler1Stop = vi.fn() as any;
-    const closeDb = vi.fn() as any;
+    const scheduler1Stop = vi.fn();
+    const closeDb = vi.fn();
 
     const deps: ShutdownDeps = {
       schedulers: [{ stop: scheduler1Stop }],
@@ -186,10 +186,10 @@ describe("registerShutdownHandlers", () => {
   it("should continue shutting down if scheduler stop() throws", () => {
     const throwingSchedulerStop = vi.fn(() => {
       throw new Error("Scheduler stop failed");
-    }) as any;
+    });
 
-    const workingSchedulerStop = vi.fn() as any;
-    const closeDb = vi.fn() as any;
+    const workingSchedulerStop = vi.fn();
+    const closeDb = vi.fn();
 
     const deps: ShutdownDeps = {
       schedulers: [
@@ -220,11 +220,11 @@ describe("registerShutdownHandlers", () => {
   });
 
   it("should continue shutting down if closeDb throws", () => {
-    const schedulerStop = vi.fn() as any;
+    const schedulerStop = vi.fn();
 
     const throwingCloseDb = vi.fn(() => {
       throw new Error("Database close failed");
-    }) as any;
+    });
 
     const deps: ShutdownDeps = {
       schedulers: [{ stop: schedulerStop }],
@@ -268,11 +268,11 @@ describe("registerShutdownHandlers", () => {
             message: parsed.msg,
           });
         },
-      } as any,
+      } as any, // pino stream typing workaround
     );
 
-    const schedulerStop = vi.fn() as any;
-    const closeDb = vi.fn() as any;
+    const schedulerStop = vi.fn();
+    const closeDb = vi.fn();
 
     const deps: ShutdownDeps = {
       schedulers: [{ stop: schedulerStop }],
@@ -325,14 +325,14 @@ describe("registerShutdownHandlers", () => {
             });
           }
         },
-      } as any,
+      } as any, // pino stream typing workaround
     );
 
     const throwingSchedulerStop = vi.fn(() => {
       throw new Error("Scheduler error message");
-    }) as any;
+    });
 
-    const closeDb = vi.fn() as any;
+    const closeDb = vi.fn();
 
     const deps: ShutdownDeps = {
       schedulers: [{ stop: throwingSchedulerStop }],
@@ -359,8 +359,8 @@ describe("registerShutdownHandlers", () => {
   });
 
   it("should exit with code 0 on successful shutdown", () => {
-    const schedulerStop = vi.fn() as any;
-    const closeDb = vi.fn() as any;
+    const schedulerStop = vi.fn();
+    const closeDb = vi.fn();
 
     const deps: ShutdownDeps = {
       schedulers: [{ stop: schedulerStop }],

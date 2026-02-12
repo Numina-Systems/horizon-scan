@@ -1,3 +1,4 @@
+import { Writable } from "node:stream";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { createDatabase } from "../db";
 import type { AppDatabase } from "../db";
@@ -6,6 +7,7 @@ import { feeds, articles, topics, assessments } from "../db/schema";
 import { createCallerFactory } from "../api/trpc";
 import { appRouter } from "../api/router";
 import pino from "pino";
+import type { Logger } from "pino";
 
 /**
  * Creates an in-memory SQLite test database with all migrations applied.
@@ -189,4 +191,46 @@ export function createTestCaller(
   const logger = pino({ level: "silent" });
 
   return createCaller({ db, config, logger });
+}
+
+/**
+ * Creates a pino logger instance with a writable stream to capture logged messages.
+ * Useful for testing structured logging output without polluting test output.
+ * @param level - Optional log level (defaults to "info").
+ * @returns Object containing the logger instance and a getMessages() function to retrieve captured logs.
+ */
+export function createTestLoggerWithCapture(
+  level?: string,
+): { logger: Logger; getMessages: () => Array<{ level: string; message: string }> } {
+  const loggedMessages: Array<{ level: string; message: string }> = [];
+
+  const logger = pino(
+    {
+      level: level ?? "info",
+      formatters: {
+        level(label: string) {
+          return { level: label };
+        },
+      },
+      timestamp: pino.stdTimeFunctions.isoTime,
+    },
+    {
+      write: (msg: string) => {
+        try {
+          const parsed = JSON.parse(msg);
+          loggedMessages.push({
+            level: parsed.level,
+            message: parsed.msg,
+          });
+        } catch {
+          // Ignore parse errors
+        }
+      },
+    } as any, // pino stream typing workaround
+  );
+
+  return {
+    logger,
+    getMessages: () => loggedMessages,
+  };
 }

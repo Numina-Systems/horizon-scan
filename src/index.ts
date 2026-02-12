@@ -1,5 +1,9 @@
+// pattern: Imperative Shell
+// pattern: Imperative Shell
 import { resolve } from "node:path";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import type { AppConfig } from "./config";
+import type { PollScheduler } from "./scheduler";
 import { createLogger } from "./logger";
 import { loadConfig } from "./config";
 import { createDatabase } from "./db";
@@ -19,7 +23,7 @@ async function main(): Promise<void> {
 
   logger.info("horizon-scan starting");
 
-  let config;
+  let config: AppConfig;
   try {
     config = loadConfig(resolve(CONFIG_PATH));
   } catch (err) {
@@ -63,7 +67,7 @@ async function main(): Promise<void> {
   const apiKey = process.env["MAILGUN_API_KEY"];
   const domain = process.env["MAILGUN_DOMAIN"];
 
-  let digestScheduler;
+  let digestScheduler: PollScheduler | undefined;
   if (apiKey && domain) {
     const sendDigest = createMailgunSender(apiKey, domain);
     digestScheduler = createDigestScheduler(db, config, sendDigest, logger);

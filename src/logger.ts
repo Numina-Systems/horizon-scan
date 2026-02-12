@@ -1,3 +1,4 @@
+// pattern: Imperative Shell
 import pino from "pino";
 
 /**
