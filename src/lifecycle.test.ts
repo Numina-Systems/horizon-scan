@@ -111,7 +111,7 @@ describe("registerShutdownHandlers", () => {
   });
 
   it("should call closeDb after stopping all schedulers", () => {
-    const callOrder: string[] = [];
+    const callOrder: Array<string> = [];
 
     const schedulerStop = vi.fn(() => {
       callOrder.push("scheduler.stop");

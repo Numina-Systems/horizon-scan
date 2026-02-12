@@ -1,5 +1,4 @@
 // pattern: Imperative Shell
-// pattern: Imperative Shell
 import { resolve } from "node:path";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import type { AppConfig } from "./config";

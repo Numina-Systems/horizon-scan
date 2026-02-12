@@ -178,7 +178,7 @@ digest:
 
   describe("AC6.2: structured log output", () => {
     it("should produce JSON logs with level, time, and msg fields", () => {
-      const chunks: string[] = [];
+      const chunks: Array<string> = [];
       const stream = new Writable({
         write(chunk: Buffer, _encoding: string, callback: () => void) {
           chunks.push(chunk.toString("utf-8"));
@@ -218,7 +218,7 @@ digest:
     });
 
     it("should include contextual fields in structured logs", () => {
-      const chunks: string[] = [];
+      const chunks: Array<string> = [];
       const stream = new Writable({
         write(chunk: Buffer, _encoding: string, callback: () => void) {
           chunks.push(chunk.toString("utf-8"));
@@ -250,7 +250,7 @@ digest:
     });
 
     it("createLogger should return configured pino instance with correct defaults", () => {
-      const chunks: string[] = [];
+      const chunks: Array<string> = [];
       const stream = new Writable({
         write(chunk: Buffer, _encoding: string, callback: () => void) {
           chunks.push(chunk.toString("utf-8"));
@@ -282,7 +282,7 @@ digest:
     });
 
     it("createLogger with stream destination should log JSON with correct format", () => {
-      const chunks: string[] = [];
+      const chunks: Array<string> = [];
       const stream = new Writable({
         write(chunk: Buffer, _encoding: string, callback: () => void) {
           chunks.push(chunk.toString("utf-8"));

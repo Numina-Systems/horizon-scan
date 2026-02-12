@@ -204,6 +204,20 @@ export function createTestLoggerWithCapture(
 ): { logger: Logger; getMessages: () => Array<{ level: string; message: string }> } {
   const loggedMessages: Array<{ level: string; message: string }> = [];
 
+  const stream = new Writable({
+    write: (msg: string) => {
+      try {
+        const parsed = JSON.parse(msg);
+        loggedMessages.push({
+          level: parsed.level,
+          message: parsed.msg,
+        });
+      } catch {
+        // Ignore parse errors
+      }
+    },
+  });
+
   const logger = pino(
     {
       level: level ?? "info",
@@ -214,19 +228,7 @@ export function createTestLoggerWithCapture(
       },
       timestamp: pino.stdTimeFunctions.isoTime,
     },
-    {
-      write: (msg: string) => {
-        try {
-          const parsed = JSON.parse(msg);
-          loggedMessages.push({
-            level: parsed.level,
-            message: parsed.msg,
-          });
-        } catch {
-          // Ignore parse errors
-        }
-      },
-    } as any, // pino stream typing workaround
+    stream,
   );
 
   return {
