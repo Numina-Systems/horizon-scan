@@ -7,6 +7,24 @@ import { runDigestCycle } from "./orchestrator";
 import type { AppConfig } from "../config";
 import type { SendResult } from "./sender";
 
+/**
+ * Creates a mock Logger instance for testing.
+ */
+function createMockLogger(): Logger {
+  return {
+    info: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    fatal: vi.fn(),
+    trace: vi.fn(),
+    level: "info" as const,
+    setLevel: vi.fn(),
+    child: vi.fn(),
+    isLevelEnabled: vi.fn(),
+  } as unknown as Logger;
+}
+
 const mockConfig: AppConfig = {
   llm: {
     provider: "anthropic",
@@ -96,18 +114,7 @@ describe("runDigestCycle", () => {
       messageId: "msg-123",
     }));
 
-    const mockLogger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      fatal: vi.fn(),
-      trace: vi.fn(),
-      level: "info" as const,
-      setLevel: vi.fn(),
-      child: vi.fn(),
-      isLevelEnabled: vi.fn(),
-    } as unknown as Logger;
+    const mockLogger = createMockLogger();
 
     await runDigestCycle(db, mockConfig, mockSendDigest, mockLogger);
 
@@ -141,18 +148,7 @@ describe("runDigestCycle", () => {
       messageId: "msg-123",
     }));
 
-    const mockLogger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      fatal: vi.fn(),
-      trace: vi.fn(),
-      level: "info" as const,
-      setLevel: vi.fn(),
-      child: vi.fn(),
-      isLevelEnabled: vi.fn(),
-    } as unknown as Logger;
+    const mockLogger = createMockLogger();
 
     await runDigestCycle(db, mockConfig, mockSendDigest, mockLogger);
 
@@ -221,18 +217,7 @@ describe("runDigestCycle", () => {
       error: "Mailgun API error",
     }));
 
-    const mockLogger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      fatal: vi.fn(),
-      trace: vi.fn(),
-      level: "info" as const,
-      setLevel: vi.fn(),
-      child: vi.fn(),
-      isLevelEnabled: vi.fn(),
-    } as unknown as Logger;
+    const mockLogger = createMockLogger();
 
     await runDigestCycle(db, mockConfig, mockSendDigest, mockLogger);
 
@@ -342,18 +327,7 @@ describe("runDigestCycle", () => {
       messageId: "msg-123",
     }));
 
-    const mockLogger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      fatal: vi.fn(),
-      trace: vi.fn(),
-      level: "info" as const,
-      setLevel: vi.fn(),
-      child: vi.fn(),
-      isLevelEnabled: vi.fn(),
-    } as unknown as Logger;
+    const mockLogger = createMockLogger();
 
     await runDigestCycle(db, mockConfig, mockSendDigest, mockLogger);
 

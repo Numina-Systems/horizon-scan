@@ -7,6 +7,22 @@ import { buildDigest } from "./builder";
 import { renderDigestHtml } from "./renderer";
 import type { SendDigestFn } from "./sender";
 
+/**
+ * Runs a complete digest cycle: builds digest data, optionally sends email, and records result.
+ *
+ * Behavior:
+ * - If no relevant articles exist, records an empty digest with status 'success' to advance
+ *   the time window, but does NOT send an email (AC3.4).
+ * - If articles exist, renders HTML, calls sendDigest, and records result with status 'success'
+ *   or 'failed' (AC3.1, AC3.5).
+ * - On send failure, articles remain available for the next digest cycle (AC3.5).
+ * - Logs progress at each step.
+ *
+ * @param db - The application database connection
+ * @param config - Application configuration including digest.recipient
+ * @param sendDigest - Function to dispatch the email (dependency injection for testability)
+ * @param logger - Logger instance for recording events
+ */
 export async function runDigestCycle(
   db: AppDatabase,
   config: AppConfig,

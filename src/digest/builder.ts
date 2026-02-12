@@ -2,8 +2,11 @@ import { eq, and, gt, desc } from "drizzle-orm";
 import type { AppDatabase } from "../db";
 import { assessments, articles, topics, digests } from "../db/schema";
 
-// pattern: Functional Core
+// pattern: Imperative Shell
 
+/**
+ * An article included in a digest, extracted from an assessment.
+ */
 export type DigestArticle = Readonly<{
   title: string | null;
   url: string;
@@ -12,16 +15,31 @@ export type DigestArticle = Readonly<{
   tags: ReadonlyArray<string>;
 }>;
 
+/**
+ * A group of articles grouped by topic for digest rendering.
+ */
 export type DigestTopicGroup = Readonly<{
   topicName: string;
   articles: ReadonlyArray<DigestArticle>;
 }>;
 
+/**
+ * Complete structured data for a digest email, ready to be rendered.
+ */
 export type DigestData = Readonly<{
   topicGroups: ReadonlyArray<DigestTopicGroup>;
   totalArticleCount: number;
 }>;
 
+/**
+ * Builds a digest by querying all relevant assessments since the last successful digest,
+ * joining with articles and topics, and grouping by topic name.
+ *
+ * @param db - The application database connection
+ * @returns Structured digest data including grouped articles and total count. Returns empty
+ *          topicGroups if no relevant articles exist in the current window (AC3.4 — caller
+ *          decides whether to send).
+ */
 export function buildDigest(db: AppDatabase): DigestData {
   // Find the last successful digest timestamp
   const lastDigest = db
@@ -38,13 +56,11 @@ export function buildDigest(db: AppDatabase): DigestData {
   const rows = db
     .select({
       topicName: topics.name,
-      topicId: topics.id,
       articleTitle: articles.title,
       articleUrl: articles.url,
       articlePublishedAt: articles.publishedAt,
       summary: assessments.summary,
       tags: assessments.tags,
-      assessedAt: assessments.assessedAt,
     })
     .from(assessments)
     .innerJoin(articles, eq(assessments.articleId, articles.id))

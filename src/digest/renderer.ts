@@ -10,6 +10,14 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Renders digest data to an HTML email string with inline styles.
+ *
+ * @param data - The structured digest data to render
+ * @returns A complete HTML email document with inline CSS styles suitable for email clients.
+ *          All styles are inline (no `<style>` tags) for compatibility with email clients.
+ *          Output includes proper HTML escaping for XSS safety (AC3.3).
+ */
 export function renderDigestHtml(data: Readonly<DigestData>): string {
   const isoString = new Date().toISOString();
   const now = isoString.split("T")[0]!;

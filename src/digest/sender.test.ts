@@ -9,7 +9,7 @@ const mockClient = {
 
 // Mock mailgun.js module
 vi.mock("mailgun.js", () => ({
-  default: vi.fn(function (FormData: any) {
+  default: vi.fn(function (_FormData: unknown) {
     return {
       client: vi.fn(() => mockClient),
     };
@@ -18,15 +18,24 @@ vi.mock("mailgun.js", () => ({
 
 // Import after mocking
 import { createMailgunSender } from "./sender";
+import type { Logger } from "pino";
 
 describe("createMailgunSender", () => {
-  let mockLogger: any;
+  let mockLogger: Logger;
 
   beforeEach(() => {
     mockLogger = {
       info: vi.fn(),
       error: vi.fn(),
-    };
+      debug: vi.fn(),
+      warn: vi.fn(),
+      fatal: vi.fn(),
+      trace: vi.fn(),
+      level: "info" as const,
+      setLevel: vi.fn(),
+      child: vi.fn(),
+      isLevelEnabled: vi.fn(),
+    } as unknown as Logger;
     mockClient.messages.create.mockReset();
   });
 

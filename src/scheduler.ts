@@ -14,6 +14,14 @@ export type PollScheduler = {
   readonly stop: () => void;
 };
 
+/**
+ * Creates and starts a scheduler that polls feeds on the configured cron schedule.
+ *
+ * @param db - The application database connection
+ * @param config - Application configuration including schedule.poll cron expression
+ * @param logger - Logger instance for recording poll events
+ * @returns A PollScheduler with a stop() method to halt the scheduled polling
+ */
 export function createPollScheduler(
   db: AppDatabase,
   config: AppConfig,
@@ -74,6 +82,15 @@ export function createPollScheduler(
   };
 }
 
+/**
+ * Creates and starts a scheduler that runs the digest cycle on the configured cron schedule.
+ *
+ * @param db - The application database connection
+ * @param config - Application configuration including schedule.digest cron expression
+ * @param sendDigest - Function to dispatch digest emails (dependency injection for testability)
+ * @param logger - Logger instance for recording digest cycle events
+ * @returns A PollScheduler with a stop() method to halt the scheduled digest cycles
+ */
 export function createDigestScheduler(
   db: AppDatabase,
   config: AppConfig,

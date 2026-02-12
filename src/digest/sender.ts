@@ -3,10 +3,17 @@ import Mailgun from "mailgun.js";
 import FormData from "form-data";
 import type { Logger } from "pino";
 
+/**
+ * Discriminated union result type for digest email send operations.
+ */
 export type SendResult =
   | { readonly success: true; readonly messageId: string }
   | { readonly success: false; readonly error: string };
 
+/**
+ * Function signature for sending a digest email via a mail provider.
+ * Never throws — errors are returned in the result (AC3.5).
+ */
 export type SendDigestFn = (
   recipient: string,
   subject: string,
@@ -14,6 +21,14 @@ export type SendDigestFn = (
   logger: Logger,
 ) => Promise<SendResult>;
 
+/**
+ * Creates a Mailgun-based digest email sender function.
+ *
+ * @param apiKey - Mailgun API key for authentication
+ * @param domain - Mailgun domain for sending emails
+ * @returns A SendDigestFn closure bound to the Mailgun credentials, ready to send emails.
+ *          The returned function catches errors and returns them in the result without throwing.
+ */
 export function createMailgunSender(
   apiKey: string,
   domain: string,
