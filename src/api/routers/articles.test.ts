@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createCallerFactory } from "@trpc/server/unstable-core-do-not-import";
+import { createCallerFactory } from "../trpc";
 import pino from "pino";
 import { appRouter } from "../router";
 import {
@@ -19,7 +19,7 @@ describe("articles router", () => {
 
   beforeEach(() => {
     db = createTestDatabase();
-    const createCaller = (createCallerFactory() as any)(appRouter);
+    const createCaller = createCallerFactory(appRouter);
     const context: AppContext = { db, config, logger };
     caller = createCaller(context);
   });

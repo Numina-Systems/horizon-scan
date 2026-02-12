@@ -4,6 +4,10 @@ import { router, publicProcedure } from "../trpc";
 import { digests } from "../../db/schema";
 import { desc } from "drizzle-orm";
 
+/**
+ * tRPC router for reading digests.
+ * Provides queries for listing digest history with pagination.
+ */
 export const digestsRouter = router({
   list: publicProcedure
     .input(

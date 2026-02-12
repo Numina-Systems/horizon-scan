@@ -4,6 +4,10 @@ import { router, publicProcedure } from "../trpc";
 import { topics } from "../../db/schema";
 import { eq } from "drizzle-orm";
 
+/**
+ * tRPC router for managing topics.
+ * Provides queries and mutations for CRUD operations on topics.
+ */
 export const topicsRouter = router({
   list: publicProcedure.query(({ ctx }) => {
     return ctx.db.select().from(topics).all();

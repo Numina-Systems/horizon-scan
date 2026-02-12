@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createCallerFactory } from "@trpc/server/unstable-core-do-not-import";
+import { createCallerFactory } from "../trpc";
 import pino from "pino";
 import { appRouter } from "../router";
 import {
@@ -20,7 +20,7 @@ describe("system router", () => {
 
   beforeEach(() => {
     db = createTestDatabase();
-    const createCaller = (createCallerFactory() as any)(appRouter);
+    const createCaller = createCallerFactory(appRouter);
     const context: AppContext = { db, config, logger };
     caller = createCaller(context);
   });
@@ -39,7 +39,7 @@ describe("system router", () => {
   });
 
   it("should include lastPollTime from most recent feed poll (AC5.3)", async () => {
-    const now = new Date();
+    const now = new Date(Math.floor(Date.now() / 1000) * 1000);
     const pastTime = new Date(now.getTime() - 60000); // 1 minute ago
 
     seedTestFeed(db, { lastPolledAt: pastTime });
@@ -77,9 +77,9 @@ describe("system router", () => {
       },
     };
 
-    const customCreateCaller = (createCallerFactory() as any)(appRouter);
+    const createCaller = createCallerFactory(appRouter);
     const context: AppContext = { db, config: customConfig, logger };
-    const customCaller = customCreateCaller(context);
+    const customCaller = createCaller(context);
 
     const result = await customCaller.system.status();
     expect(result.digestCron).toBe("0 18 * * 1-5");
@@ -94,9 +94,9 @@ describe("system router", () => {
       },
     };
 
-    const customCreateCaller = (createCallerFactory() as any)(appRouter);
+    const createCaller = createCallerFactory(appRouter);
     const context: AppContext = { db, config: customConfig, logger };
-    const customCaller = customCreateCaller(context);
+    const customCaller = createCaller(context);
 
     const result = await customCaller.system.status();
     expect(result.provider).toBe("openai");

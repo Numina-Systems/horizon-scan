@@ -4,6 +4,10 @@ import { router, publicProcedure } from "../trpc";
 import { assessments } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
 
+/**
+ * tRPC router for reading assessments.
+ * Provides queries for listing and retrieving assessments with optional filtering.
+ */
 export const assessmentsRouter = router({
   list: publicProcedure
     .input(

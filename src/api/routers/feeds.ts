@@ -4,6 +4,10 @@ import { router, publicProcedure } from "../trpc";
 import { feeds } from "../../db/schema";
 import { eq } from "drizzle-orm";
 
+/**
+ * tRPC router for managing feeds.
+ * Provides queries and mutations for CRUD operations on feeds.
+ */
 export const feedsRouter = router({
   list: publicProcedure.query(({ ctx }) => {
     return ctx.db.select().from(feeds).all();

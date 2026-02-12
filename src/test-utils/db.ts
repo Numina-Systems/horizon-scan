@@ -169,3 +169,25 @@ export function createTestConfig(): AppConfig {
     },
   };
 }
+
+/**
+ * Creates a fully-typed tRPC caller for testing router procedures directly.
+ * Accepts optional config overrides for custom test scenarios.
+ * @param db - The AppDatabase instance to use.
+ * @param configOverrides - Optional partial AppConfig to override defaults.
+ * @returns A typed caller function that can invoke router procedures.
+ */
+export function createTestCaller(
+  db: AppDatabase,
+  configOverrides?: Partial<AppConfig>,
+) {
+  const { createCallerFactory } = require("../api/trpc");
+  const { appRouter } = require("../api/router");
+  const pino = require("pino");
+
+  const createCaller = createCallerFactory(appRouter);
+  const config = { ...createTestConfig(), ...configOverrides };
+  const logger = pino({ level: "silent" });
+
+  return createCaller({ db, config, logger });
+}

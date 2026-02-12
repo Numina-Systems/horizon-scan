@@ -2,8 +2,12 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc";
 import { articles, assessments } from "../../db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
+/**
+ * tRPC router for reading articles.
+ * Provides queries for listing and retrieving articles with optional filtering and assessments.
+ */
 export const articlesRouter = router({
   list: publicProcedure
     .input(

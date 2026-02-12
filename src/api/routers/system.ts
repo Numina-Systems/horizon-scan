@@ -3,6 +3,10 @@ import { router, publicProcedure } from "../trpc";
 import { feeds, topics } from "../../db/schema";
 import { sql, desc } from "drizzle-orm";
 
+/**
+ * tRPC router for system health and status.
+ * Provides queries for retrieving system-wide information and status.
+ */
 export const systemRouter = router({
   status: publicProcedure.query(({ ctx }) => {
     const feedCount = ctx.db
