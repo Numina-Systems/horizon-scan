@@ -135,7 +135,7 @@ describe("deduplicateAndStore", () => {
     const db = createTestDatabase();
     const feedId = seedTestFeed(db);
 
-    const firstBatch: ParsedRssItem[] = [
+    const firstBatch: Array<ParsedRssItem> = [
       {
         guid: "article-existing-1",
         title: "Existing 1",
@@ -152,7 +152,7 @@ describe("deduplicateAndStore", () => {
       },
     ];
 
-    const secondBatch: ParsedRssItem[] = [
+    const secondBatch: Array<ParsedRssItem> = [
       {
         guid: "article-existing-1",
         title: "Existing 1 (duplicate)",
