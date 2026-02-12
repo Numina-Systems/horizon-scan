@@ -9,18 +9,11 @@ import type { ParsedRssItem } from "./types";
 const logger = pino({ level: "silent" });
 
 describe("deduplicateAndStore", () => {
-  let feedId: number;
-
-  beforeEach(() => {
-    const db = createTestDatabase();
-    feedId = seedTestFeed(db);
-  });
-
   it("should insert new articles with correct fields and pending_assessment status", () => {
     const db = createTestDatabase();
-    feedId = seedTestFeed(db);
+    const feedId = seedTestFeed(db);
 
-    const items: ParsedRssItem[] = [
+    const items: Array<ParsedRssItem> = [
       {
         guid: "article-1",
         title: "Test Article 1",
@@ -69,9 +62,9 @@ describe("deduplicateAndStore", () => {
 
   it("should insert all new items when no duplicates exist", () => {
     const db = createTestDatabase();
-    feedId = seedTestFeed(db);
+    const feedId = seedTestFeed(db);
 
-    const items: ParsedRssItem[] = [
+    const items: Array<ParsedRssItem> = [
       {
         guid: "new-1",
         title: "New Article 1",
@@ -107,7 +100,7 @@ describe("deduplicateAndStore", () => {
 
   it("should skip duplicate articles by GUID without throwing error", () => {
     const db = createTestDatabase();
-    feedId = seedTestFeed(db);
+    const feedId = seedTestFeed(db);
 
     const item1: ParsedRssItem = {
       guid: "duplicate-guid",
@@ -140,7 +133,7 @@ describe("deduplicateAndStore", () => {
 
   it("should handle mixed new and duplicate items correctly", () => {
     const db = createTestDatabase();
-    feedId = seedTestFeed(db);
+    const feedId = seedTestFeed(db);
 
     const firstBatch: ParsedRssItem[] = [
       {
@@ -227,7 +220,7 @@ describe("deduplicateAndStore", () => {
 
   it("should handle empty items array", () => {
     const db = createTestDatabase();
-    feedId = seedTestFeed(db);
+    const feedId = seedTestFeed(db);
 
     const result = deduplicateAndStore(db, feedId, "Test Feed", [], logger);
 
@@ -240,9 +233,9 @@ describe("deduplicateAndStore", () => {
 
   it("should handle items with all duplicates", () => {
     const db = createTestDatabase();
-    feedId = seedTestFeed(db);
+    const feedId = seedTestFeed(db);
 
-    const items: ParsedRssItem[] = [
+    const items: Array<ParsedRssItem> = [
       {
         guid: "dup-1",
         title: "Duplicate 1",
@@ -275,7 +268,7 @@ describe("deduplicateAndStore", () => {
 
   it("should store article with null title and publishedAt", () => {
     const db = createTestDatabase();
-    feedId = seedTestFeed(db);
+    const feedId = seedTestFeed(db);
 
     const item: ParsedRssItem = {
       guid: "no-metadata-article",
@@ -345,7 +338,7 @@ describe("deduplicateAndStore", () => {
 
   it("should preserve complex metadata structures", () => {
     const db = createTestDatabase();
-    feedId = seedTestFeed(db);
+    const feedId = seedTestFeed(db);
 
     const item: ParsedRssItem = {
       guid: "complex-metadata-article",

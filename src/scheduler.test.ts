@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import pino from "pino";
 import { createTestDatabase, seedTestFeed } from "./test-utils/db";
 import type { AppDatabase } from "./db";
+import type { AppConfig } from "./config";
 import type { ParsedRssItem } from "./pipeline/types";
 
 vi.mock("node-cron");
@@ -35,7 +36,7 @@ describe("createPollScheduler", () => {
   it("should register a cron task with the configured schedule (AC1.1)", async () => {
     const { createPollScheduler } = await import("./scheduler");
 
-    const config: any = {
+    const config: AppConfig = {
       schedule: { poll: "0 * * * *", digest: "0 9 * * *" },
       feeds: [],
       topics: [],
@@ -61,7 +62,7 @@ describe("createPollScheduler", () => {
     const { pollFeed } = await import("./pipeline/poller");
     const { deduplicateAndStore } = await import("./pipeline/dedup");
 
-    const config: any = {
+    const config: AppConfig = {
       schedule: { poll: "0 * * * *", digest: "0 9 * * *" },
       feeds: [],
       topics: [],
@@ -127,7 +128,7 @@ describe("createPollScheduler", () => {
     const { pollFeed } = await import("./pipeline/poller");
     const { deduplicateAndStore } = await import("./pipeline/dedup");
 
-    const config: any = {
+    const config: AppConfig = {
       schedule: { poll: "0 * * * *", digest: "0 9 * * *" },
       feeds: [],
       topics: [],
@@ -192,7 +193,7 @@ describe("createPollScheduler", () => {
     const { pollFeed } = await import("./pipeline/poller");
     const { deduplicateAndStore } = await import("./pipeline/dedup");
 
-    const config: any = {
+    const config: AppConfig = {
       schedule: { poll: "0 * * * *", digest: "0 9 * * *" },
       feeds: [],
       topics: [],
@@ -259,7 +260,7 @@ describe("createPollScheduler", () => {
   it("should return a stop() method that stops the cron task (AC1.1)", async () => {
     const { createPollScheduler } = await import("./scheduler");
 
-    const config: any = {
+    const config: AppConfig = {
       schedule: { poll: "0 * * * *", digest: "0 9 * * *" },
       feeds: [],
       topics: [],

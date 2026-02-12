@@ -8,9 +8,7 @@ type CustomItem = {
   dcContributor?: string;
 };
 
-let parserInstance: Parser<Record<string, unknown>, CustomItem> | null = null;
-
-export function createParser(): Parser<Record<string, unknown>, CustomItem> {
+function createParser(): Parser<Record<string, unknown>, CustomItem> {
   return new Parser<Record<string, unknown>, CustomItem>({
     customFields: {
       item: [
@@ -22,21 +20,13 @@ export function createParser(): Parser<Record<string, unknown>, CustomItem> {
   });
 }
 
-export function getParserInstance(): Parser<Record<string, unknown>, CustomItem> {
-  if (!parserInstance) {
-    parserInstance = createParser();
+let parser: Parser<Record<string, unknown>, CustomItem> | null = null;
+
+function getParser(): Parser<Record<string, unknown>, CustomItem> {
+  if (!parser) {
+    parser = createParser();
   }
-  return parserInstance;
-}
-
-export function setParserInstance(
-  parser: Parser<Record<string, unknown>, CustomItem>,
-): void {
-  parserInstance = parser;
-}
-
-export function resetParser(): void {
-  parserInstance = null;
+  return parser;
 }
 
 export async function pollFeed(
@@ -45,8 +35,7 @@ export async function pollFeed(
   logger: Logger,
 ): Promise<PollResult> {
   try {
-    const parser = getParserInstance();
-    const feed = await parser.parseURL(feedUrl);
+    const feed = await getParser().parseURL(feedUrl);
 
     const items: Array<ParsedRssItem> = feed.items.map((item) => {
       const guid = item.guid ?? item.link ?? "";
