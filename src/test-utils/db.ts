@@ -12,7 +12,7 @@ import pino from "pino";
  * @returns A new AppDatabase instance with schema initialized.
  */
 export function createTestDatabase(): AppDatabase {
-  const db = createDatabase(":memory:");
+  const { db } = createDatabase(":memory:");
   migrate(db, { migrationsFolder: "./drizzle" });
   return db;
 }

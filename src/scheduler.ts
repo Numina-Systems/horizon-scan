@@ -2,11 +2,15 @@ import cron from "node-cron";
 import type { ScheduledTask } from "node-cron";
 import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
+import type { LanguageModel } from "ai";
 import type { AppDatabase } from "./db";
 import type { AppConfig } from "./config";
 import { feeds } from "./db/schema";
 import { pollFeed } from "./pipeline/poller";
 import { deduplicateAndStore } from "./pipeline/dedup";
+import { fetchPendingArticles } from "./pipeline/fetcher";
+import { extractPendingArticles } from "./pipeline/extract-articles";
+import { assessPendingArticles } from "./pipeline/assessor";
 import { runDigestCycle } from "./digest/orchestrator";
 import type { SendDigestFn } from "./digest/sender";
 
@@ -14,18 +18,25 @@ export type PollScheduler = {
   readonly stop: () => void;
 };
 
+export type PipelineDeps = {
+  readonly model: LanguageModel | null;
+};
+
 /**
  * Creates and starts a scheduler that polls feeds on the configured cron schedule.
+ * Runs the full pipeline: poll → dedup → fetch → extract → assess.
  *
  * @param db - The application database connection
  * @param config - Application configuration including schedule.poll cron expression
  * @param logger - Logger instance for recording poll events
+ * @param pipeline - Optional pipeline dependencies (LLM model for assessment)
  * @returns A PollScheduler with a stop() method to halt the scheduled polling
  */
 export function createPollScheduler(
   db: AppDatabase,
   config: AppConfig,
   logger: Logger,
+  pipeline?: PipelineDeps,
 ): PollScheduler {
   const task: ScheduledTask = cron.schedule(
     config.schedule.poll,
@@ -68,6 +79,32 @@ export function createPollScheduler(
             { feedName: feed.name, feedUrl: feed.url, error: message },
             "unexpected error during feed processing",
           );
+        }
+      }
+
+      // Stage 3: Fetch article content
+      try {
+        await fetchPendingArticles(db, config, logger);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error({ error: message }, "fetch stage failed");
+      }
+
+      // Stage 4: Extract article content
+      try {
+        extractPendingArticles(db, logger);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error({ error: message }, "extract stage failed");
+      }
+
+      // Stage 5: Assess articles against topics
+      if (pipeline?.model) {
+        try {
+          await assessPendingArticles(db, pipeline.model, config, logger);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.error({ error: message }, "assessment stage failed");
         }
       }
 

@@ -7,14 +7,17 @@ import * as schema from "./schema";
 
 export function createDatabase(
   dbPath: string,
-): BetterSQLite3Database<typeof schema> {
+): { readonly db: AppDatabase; readonly close: () => void } {
   mkdirSync(dirname(dbPath), { recursive: true });
 
   const sqlite = new Database(dbPath);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
 
-  return drizzle(sqlite, { schema });
+  const db = drizzle(sqlite, { schema });
+
+  return { db, close: () => sqlite.close() };
 }
 
+export type DatabaseResult = ReturnType<typeof createDatabase>;
 export type AppDatabase = BetterSQLite3Database<typeof schema>;
