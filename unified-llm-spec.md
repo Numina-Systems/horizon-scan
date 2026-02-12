@@ -1,6 +1,6 @@
 # Unified LLM Client Specification
 
-This document is a consolidated, language-agnostic specification for building a unified client library that provides a single interface across multiple LLM providers (OpenAI, Anthropic, Google Gemini, and others). It is designed to be implementable from scratch by any developer or coding agent in any programming language.
+This document is a consolidated, language-agnostic specification for building a unified client library that provides a single interface across multiple LLM providers (OpenAI, Anthropic, Google Gemini, Zhipu AI, and others). It is designed to be implementable from scratch by any developer or coding agent in any programming language.
 
 ---
 
@@ -21,7 +21,7 @@ This document is a consolidated, language-agnostic specification for building a 
 
 ### 1.1 Problem Statement
 
-Applications that use large language models face a fragmented ecosystem. Each provider -- OpenAI, Anthropic, Google Gemini, and others -- exposes a different HTTP API with different message formats, tool calling conventions, streaming protocols, error shapes, and authentication mechanisms. Switching providers or supporting multiple providers requires rewriting request construction, response parsing, error handling, and streaming logic.
+Applications that use large language models face a fragmented ecosystem. Each provider -- OpenAI, Anthropic, Google Gemini, Zhipu AI, and others -- exposes a different HTTP API with different message formats, tool calling conventions, streaming protocols, error shapes, and authentication mechanisms. Switching providers or supporting multiple providers requires rewriting request construction, response parsing, error handling, and streaming logic.
 
 This specification defines a unified client library that solves this problem. Developers write provider-agnostic code and switch models by changing a single string identifier. No rewiring, no adapter-specific imports.
 
@@ -90,9 +90,10 @@ Environment variable conventions:
 | OpenAI    | OPENAI_API_KEY         | OPENAI_BASE_URL, OPENAI_ORG_ID, OPENAI_PROJECT_ID  |
 | Anthropic | ANTHROPIC_API_KEY      | ANTHROPIC_BASE_URL                                  |
 | Gemini    | GEMINI_API_KEY         | GEMINI_BASE_URL                                     |
+| Zhipu AI  | ZAI_API_KEY            | ZAI_BASE_URL                                        |
 | Local     | OLLAMA_API_KEY         | OLLAMA_BASE_URL                                     |
 
-Alternate key names may be accepted (e.g., `GOOGLE_API_KEY` as a fallback for `GEMINI_API_KEY`). Only providers whose keys are present in the environment are registered. The first registered provider becomes the default.
+Alternate key names may be accepted (e.g., `GOOGLE_API_KEY` as a fallback for `GEMINI_API_KEY`, `ZHIPUAI_API_KEY` as a fallback for `ZAI_API_KEY`). Only providers whose keys are present in the environment are registered. The first registered provider becomes the default.
 
 #### Programmatic Setup
 
@@ -118,7 +119,7 @@ When a request specifies a `provider` field, the Client routes to that adapter. 
 
 #### Model String Convention
 
-Model identifiers are the provider's native string (e.g., `"gpt-5.2"`, `"claude-opus-4-6"`, `"gemini-3-flash-preview"`). The library does not invent its own model namespace. This avoids the maintenance burden of mapping tables and ensures new models work immediately without library updates. If a model string could be ambiguous (multiple providers support it), the `provider` field on the request disambiguates.
+Model identifiers are the provider's native string (e.g., `"gpt-5.2"`, `"claude-opus-4-6"`, `"gemini-3-flash-preview"`, `"glm-5"`). The library does not invent its own model namespace. This avoids the maintenance burden of mapping tables and ensures new models work immediately without library updates. If a model string could be ambiguous (multiple providers support it), the `provider` field on the request disambiguates.
 
 ### 2.3 Middleware / Interceptor Pattern
 
@@ -217,9 +218,10 @@ Each provider adapter MUST use the provider's native, preferred API -- not a com
 | OpenAI    | **Responses API** (`/v1/responses`) | The Responses API properly surfaces reasoning tokens, supports built-in tools (web search, file search, code interpreter), and is OpenAI's forward-looking API. The Chat Completions API does not return reasoning tokens for reasoning models (GPT-5.2 series, etc.) and lacks server-side conversation state. |
 | Anthropic | **Messages API** (`/v1/messages`)   | The Messages API supports extended thinking with thinking blocks and signatures, prompt caching with `cache_control`, beta feature headers, and the strict user/assistant alternation model. There is no alternative. |
 | Gemini    | **Gemini API** (`/v1beta/models/*/generateContent`) | The native Gemini API supports grounding with Google Search, code execution, system instructions, and cached content. OpenAI-compatible endpoints for Gemini are limited shims. |
+| Zhipu AI  | **Chat Completions API** (`/api/paas/v4/chat/completions`) | Zhipu AI's API is OpenAI-compatible in shape but served at a different base URL (`api.z.ai`). It supports z.ai-specific features like built-in web search tools, thinking mode via the `thinking` parameter, and `reasoning_content` fields in responses. Using it directly (rather than the OpenAI-compatible adapter) ensures these features are accessible. |
 | Ollama    | **ollama-js** | Better support for Ollama's diverse range of models. |
 
-The unified SDK abstracts over these different APIs so that callers write provider-agnostic code, but internally each adapter speaks the provider's native protocol. This is the entire value proposition: the complexity of three different APIs is handled once in the adapters so that downstream consumers (like a coding agent) never have to think about it.
+The unified SDK abstracts over these different APIs so that callers write provider-agnostic code, but internally each adapter speaks the provider's native protocol. This is the entire value proposition: the complexity of multiple different APIs is handled once in the adapters so that downstream consumers (like a coding agent) never have to think about it. Note that the Zhipu AI adapter is structurally similar to the OpenAI-compatible adapter (both use Chat Completions format), but is a distinct adapter to properly handle z.ai-specific features like `reasoning_content` fields, the `thinking` parameter, and built-in web search tools.
 
 ### 2.8 Provider Beta Headers and Feature Flags
 
@@ -251,6 +253,8 @@ The Anthropic adapter joins these into a comma-separated `anthropic-beta` header
 
 **Gemini configuration.** Gemini supports safety settings, grounding configuration, and cached content references as part of the request body. These should be passable through `provider_options`.
 
+**Zhipu AI configuration.** Zhipu AI supports thinking mode (`thinking` parameter), built-in web search tools, and `do_sample` control as part of the request body. These should be passable through `provider_options`.
+
 The key principle: the unified interface handles the common 90% of cases. The `provider_options` escape hatch handles the remaining 10% without requiring library changes for every new provider feature.
 
 ### 2.9 Model Catalog
@@ -279,6 +283,7 @@ RECORD ModelInfo:
 | Anthropic | **Claude Opus 4.6**, Claude Sonnet 4.5               |
 | OpenAI    | **GPT-5.2 series** (GPT-5.2, GPT-5.2-codex)        |
 | Gemini    | **Gemini 3 Pro (Preview)**, Gemini 3 Flash (Preview) |
+| Zhipu AI  | **GLM-5**, GLM-4.7, GLM-4.6V (vision)               |
 
 Implementations should default to the latest available models when no model is specified by the caller, and should prefer newer models in any model selection logic. However, the catalog must also include older models that are still served by the APIs, as callers may need them for cost, latency, or compatibility reasons.
 
@@ -307,6 +312,15 @@ MODELS = [
 
     ModelInfo(id="gemini-3-pro-preview",          provider="gemini",    display_name="Gemini 3 Pro (Preview)",   context_window=1048576, supports_tools=true, supports_vision=true, supports_reasoning=true),
     ModelInfo(id="gemini-3-flash-preview",        provider="gemini",    display_name="Gemini 3 Flash (Preview)", context_window=1048576, supports_tools=true, supports_vision=true, supports_reasoning=true),
+
+    -- ==========================================================
+    -- Zhipu AI (z.ai) -- prefer GLM-5 for top quality
+    -- ==========================================================
+
+    ModelInfo(id="glm-5",                         provider="zhipu",    display_name="GLM-5",                   context_window=200000,  supports_tools=true, supports_vision=false, supports_reasoning=true),
+    ModelInfo(id="glm-4.7",                       provider="zhipu",    display_name="GLM-4.7",                 context_window=200000,  supports_tools=true, supports_vision=false, supports_reasoning=true),
+    ModelInfo(id="glm-4.7-flash",                 provider="zhipu",    display_name="GLM-4.7 Flash",           context_window=200000,  supports_tools=true, supports_vision=false, supports_reasoning=true),
+    ModelInfo(id="glm-4.6v",                      provider="zhipu",    display_name="GLM-4.6V",                context_window=128000,  supports_tools=true, supports_vision=true,  supports_reasoning=true),
 ]
 ```
 
@@ -338,6 +352,7 @@ Prompt caching allows providers to reuse computation from previous requests when
 | OpenAI    | Automatic -- the Responses API caches shared prefixes server-side     | None. Use the Responses API and report `cache_read_tokens` from usage. |
 | Gemini    | Automatic -- prefix caching for repeated content, plus explicit `cachedContent` API for long contexts | None for automatic. Expose explicit caching via `provider_options`. |
 | Anthropic | **Not automatic.** Requires explicit `cache_control` annotations on content blocks. | The Anthropic adapter must inject `cache_control` breakpoints automatically for agentic workloads. |
+| Zhipu AI  | Automatic -- server-side prefix caching with ~50% discount on cached tokens | None. Report `cached_tokens` from `usage.prompt_tokens_details.cached_tokens`. |
 
 Anthropic is the only provider where the SDK must do extra work. Without cache_control annotations, every turn re-processes the entire system prompt and conversation history at full price. With proper caching, cached input tokens cost 90% less. This is the single highest-ROI optimization for agentic workloads.
 
@@ -407,13 +422,13 @@ ENUM Role:
 
 Provider mapping for roles:
 
-| SDK Role    | OpenAI               | Anthropic                          | Gemini                    |
-|-------------|----------------------|------------------------------------|---------------------------|
-| SYSTEM      | `system` role        | Extracted to `system` parameter    | `systemInstruction`       |
-| USER        | `user` role          | `user` role                        | `user` role               |
-| ASSISTANT   | `assistant` role     | `assistant` role                   | `model` role              |
-| TOOL        | `tool` role          | `tool_result` block in user msg    | `functionResponse` in user|
-| DEVELOPER   | `developer` role     | Merged with system                 | Merged with system        |
+| SDK Role    | OpenAI               | Anthropic                          | Gemini                    | Zhipu AI                  |
+|-------------|----------------------|------------------------------------|---------------------------|---------------------------|
+| SYSTEM      | `system` role        | Extracted to `system` parameter    | `systemInstruction`       | `system` role             |
+| USER        | `user` role          | `user` role                        | `user` role               | `user` role               |
+| ASSISTANT   | `assistant` role     | `assistant` role                   | `model` role              | `assistant` role          |
+| TOOL        | `tool` role          | `tool_result` block in user msg    | `functionResponse` in user| `tool` role               |
+| DEVELOPER   | `developer` role     | Merged with system                 | Merged with system        | Merged with system        |
 
 ### 3.3 ContentPart (Tagged Union)
 
@@ -478,14 +493,14 @@ Exactly one of `url` or `data` must be provided. The adapter base64-encodes `dat
 
 **Image upload is critical for multimodal capabilities.** Many models (Claude, GPT-4.1, Gemini) accept image inputs for analysis, code screenshot reading, diagram understanding, and more. The SDK must handle image upload correctly across all providers:
 
-| Concern              | OpenAI                                               | Anthropic                                         | Gemini                                            |
-|----------------------|------------------------------------------------------|---------------------------------------------------|---------------------------------------------------|
-| URL images           | `image_url.url` field                                | `source.type = "url"` with `url` field            | `fileData.fileUri` field                          |
-| Base64 images        | `image_url.url` as data URI (`data:mime;base64,...`) | `source.type = "base64"` with `data` + `media_type` | `inlineData` with `data` + `mimeType`           |
-| File path (local)    | Read file, base64-encode, send as data URI           | Read file, base64-encode, send as base64 source   | Read file, base64-encode, send as inlineData     |
-| Supported formats    | PNG, JPEG, GIF, WEBP                                | PNG, JPEG, GIF, WEBP                              | PNG, JPEG, GIF, WEBP, HEIC, HEIF                |
-| Max image size       | 20MB                                                 | ~5MB per image (base64 encoded)                   | Varies by method                                  |
-| Detail/fidelity hint | `detail`: "auto", "low", "high"                     | Not supported (ignore)                            | Not supported (ignore)                            |
+| Concern              | OpenAI                                               | Anthropic                                         | Gemini                                            | Zhipu AI (vision models only)                     |
+|----------------------|------------------------------------------------------|---------------------------------------------------|---------------------------------------------------|---------------------------------------------------|
+| URL images           | `image_url.url` field                                | `source.type = "url"` with `url` field            | `fileData.fileUri` field                          | `image_url.url` field                             |
+| Base64 images        | `image_url.url` as data URI (`data:mime;base64,...`) | `source.type = "base64"` with `data` + `media_type` | `inlineData` with `data` + `mimeType`           | `image_url.url` as data URI (`data:mime;base64,...`) |
+| File path (local)    | Read file, base64-encode, send as data URI           | Read file, base64-encode, send as base64 source   | Read file, base64-encode, send as inlineData     | Read file, base64-encode, send as data URI        |
+| Supported formats    | PNG, JPEG, GIF, WEBP                                | PNG, JPEG, GIF, WEBP                              | PNG, JPEG, GIF, WEBP, HEIC, HEIF                | PNG, JPEG, GIF, WEBP                              |
+| Max image size       | 20MB                                                 | ~5MB per image (base64 encoded)                   | Varies by method                                  | Varies by model                                   |
+| Detail/fidelity hint | `detail`: "auto", "low", "high"                     | Not supported (ignore)                            | Not supported (ignore)                            | Not supported (ignore)                            |
 
 **Convenience: file path support.** The SDK should accept a local file path as a convenience. When `url` looks like a local file path (starts with `/`, `./`, or `~`), the adapter reads the file, infers the MIME type from the extension, base64-encodes the contents, and sends it using the provider's inline data format. This makes it easy for coding agents to send screenshots and diagrams without manual encoding.
 
@@ -647,6 +662,11 @@ Provider finish reason mapping:
 | Gemini    | SAFETY            | content_filter   |
 | Gemini    | RECITATION        | content_filter   |
 | Gemini    | (has tool calls)  | tool_calls       |
+| Zhipu AI  | stop              | stop             |
+| Zhipu AI  | length            | length           |
+| Zhipu AI  | tool_calls        | tool_calls       |
+| Zhipu AI  | sensitive         | content_filter   |
+| Zhipu AI  | network_error     | error            |
 
 Note: Gemini does not have a dedicated "tool_calls" finish reason. The adapter infers it from the presence of `functionCall` parts in the response.
 
@@ -674,13 +694,13 @@ usage_a + usage_b -> Usage
 
 Provider usage field mapping:
 
-| SDK Field           | OpenAI Field                                         | Anthropic Field                  | Gemini Field                          |
-|---------------------|------------------------------------------------------|----------------------------------|---------------------------------------|
-| input_tokens        | usage.prompt_tokens                                  | usage.input_tokens               | usageMetadata.promptTokenCount        |
-| output_tokens       | usage.completion_tokens                              | usage.output_tokens              | usageMetadata.candidatesTokenCount    |
-| reasoning_tokens    | usage.completion_tokens_details.reasoning_tokens     | (see note below)                 | usageMetadata.thoughtsTokenCount      |
-| cache_read_tokens   | usage.prompt_tokens_details.cached_tokens            | usage.cache_read_input_tokens    | usageMetadata.cachedContentTokenCount |
-| cache_write_tokens  | (not provided)                                       | usage.cache_creation_input_tokens| (not provided)                        |
+| SDK Field           | OpenAI Field                                         | Anthropic Field                  | Gemini Field                          | Zhipu AI Field                                |
+|---------------------|------------------------------------------------------|----------------------------------|---------------------------------------|-----------------------------------------------|
+| input_tokens        | usage.prompt_tokens                                  | usage.input_tokens               | usageMetadata.promptTokenCount        | usage.prompt_tokens                           |
+| output_tokens       | usage.completion_tokens                              | usage.output_tokens              | usageMetadata.candidatesTokenCount    | usage.completion_tokens                       |
+| reasoning_tokens    | usage.completion_tokens_details.reasoning_tokens     | (see note below)                 | usageMetadata.thoughtsTokenCount      | (estimate from reasoning_content length)      |
+| cache_read_tokens   | usage.prompt_tokens_details.cached_tokens            | usage.cache_read_input_tokens    | usageMetadata.cachedContentTokenCount | usage.prompt_tokens_details.cached_tokens     |
+| cache_write_tokens  | (not provided)                                       | usage.cache_creation_input_tokens| (not provided)                        | (not provided)                                |
 
 #### Reasoning Token Handling (Critical)
 
@@ -701,6 +721,11 @@ Reasoning tokens are tokens the model uses for internal chain-of-thought before 
 - Gemini 3 Flash supports "thinking" via the `thinkingConfig` parameter.
 - Gemini reports `thoughtsTokenCount` in `usageMetadata`, which maps directly to `reasoning_tokens`.
 - Thinking content may be returned in the response as a `thought` part.
+
+**Zhipu AI thinking (GLM-5, GLM-4.7 models):**
+- Thinking is enabled via the `thinking` parameter: `{"type": "enabled"}` (default) or `{"type": "disabled"}`.
+- Zhipu AI surfaces thinking as a `reasoning_content` field on the assistant message, separate from the `content` field. In streaming mode, `reasoning_content` deltas arrive before `content` deltas.
+- Zhipu AI does not provide a separate reasoning token count. The adapter should estimate `reasoning_tokens` from the `reasoning_content` text length or treat it as part of `output_tokens`.
 
 **Why this matters:** When switching between providers, reasoning token usage can vary dramatically. A query that uses 500 reasoning tokens on OpenAI GPT-5.2 might use 2000 thinking tokens on Claude. The unified SDK must track this accurately so callers can make informed cost decisions. Even though reasoning tokens make direct provider switching unfavorable (the thinking styles are different), the SDK should still translate correctly so higher-level tools can compare.
 
@@ -987,6 +1012,7 @@ result.text     -- raw text response
 | OpenAI    | Native `response_format: { type: "json_schema", ... }` with strict mode    |
 | Gemini    | Native `responseMimeType: "application/json"` with `responseSchema`        |
 | Anthropic | Fallback: inject schema instructions into the system prompt, parse output. Alternatively, use tool-based extraction (define a tool whose input schema matches the desired output, force the model to call it). |
+| Zhipu AI  | Native `response_format: { type: "json_object" }` with schema instructions in the system prompt. Does not support `json_schema` mode -- validate output client-side with a JSON Schema library. |
 
 If parsing or validation fails, the function raises `NoObjectGeneratedError`.
 
@@ -1136,12 +1162,12 @@ RECORD ToolChoice:
 
 Provider mapping:
 
-| SDK Mode  | OpenAI                                                  | Anthropic                          | Gemini                                                     |
-|-----------|---------------------------------------------------------|------------------------------------|------------------------------------------------------------|
-| auto      | `"auto"`                                                | `{"type": "auto"}`                 | `"AUTO"`                                                   |
-| none      | `"none"`                                                | Omit tools from request            | `"NONE"`                                                   |
-| required  | `"required"`                                            | `{"type": "any"}`                  | `"ANY"`                                                    |
-| named     | `{"type":"function","function":{"name":"..."}}`        | `{"type":"tool","name":"..."}`     | `{"mode":"ANY","allowedFunctionNames":["..."]}`            |
+| SDK Mode  | OpenAI                                                  | Anthropic                          | Gemini                                                     | Zhipu AI                  |
+|-----------|---------------------------------------------------------|------------------------------------|------------------------------------------------------------|---------------------------|
+| auto      | `"auto"`                                                | `{"type": "auto"}`                 | `"AUTO"`                                                   | `"auto"`                  |
+| none      | `"none"`                                                | Omit tools from request            | `"NONE"`                                                   | Omit tools from request   |
+| required  | `"required"`                                            | `{"type": "any"}`                  | `"ANY"`                                                    | Not supported             |
+| named     | `{"type":"function","function":{"name":"..."}}`        | `{"type":"tool","name":"..."}`     | `{"mode":"ANY","allowedFunctionNames":["..."]}`            | Not supported             |
 
 Note on Anthropic `none` mode: Anthropic does not support `tool_choice: {"type": "none"}` when tools are present. The adapter must omit the tools array from the request body entirely.
 
@@ -1267,9 +1293,9 @@ When streaming with active tools, the stream emits tool call events as they form
 
 How tool results are translated to each provider's format:
 
-| SDK Format                           | OpenAI                                | Anthropic                             | Gemini                              |
-|--------------------------------------|---------------------------------------|---------------------------------------|-------------------------------------|
-| TOOL role message with ToolResultData | Separate `tool` messages with `tool_call_id` | `tool_result` content blocks in `user` message | `functionResponse` parts in `user` content |
+| SDK Format                           | OpenAI                                | Anthropic                             | Gemini                              | Zhipu AI                                |
+|--------------------------------------|---------------------------------------|---------------------------------------|-------------------------------------|----------------------------------------|
+| TOOL role message with ToolResultData | Separate `tool` messages with `tool_call_id` | `tool_result` content blocks in `user` message | `functionResponse` parts in `user` content | Separate `tool` messages with `tool_call_id` |
 
 ---
 
@@ -1588,14 +1614,40 @@ Special behaviors:
 - **Function response format:** Gemini's `functionResponse` uses the function *name* (not the call ID) and expects a dict for the response (wrap strings in `{"result": "..."}` if needed).
 - **Streaming format:** Gemini uses JSON chunks (optionally via SSE with `?alt=sse`), not a standard SSE endpoint.
 
+#### Zhipu AI Message Translation
+
+```
+Unified Role    -> Zhipu AI Handling
+SYSTEM          -> "system" role (kept in messages array)
+DEVELOPER       -> Merged with system
+USER            -> "user" role (supports multimodal arrays: text, image_url, video_url, file_url)
+ASSISTANT       -> "assistant" role
+TOOL            -> "tool" role with tool_call_id
+
+ContentPart Translations:
+  TEXT          -> { "type": "text", "text": "..." } (in multimodal array) or plain string
+  IMAGE (url)  -> { "type": "image_url", "image_url": { "url": "..." } }
+  IMAGE (data) -> { "type": "image_url", "image_url": { "url": "data:<mime>;base64,<data>" } }
+  TOOL_CALL    -> tool_calls array: { "id": "...", "type": "function", "function": { "name": "...", "arguments": "..." } }
+  TOOL_RESULT  -> { "role": "tool", "content": "...", "tool_call_id": "..." }
+  THINKING     -> reasoning_content field on assistant message (see note)
+```
+
+Special behaviors:
+- **OpenAI-compatible format:** Zhipu AI's API closely follows the OpenAI Chat Completions shape. Most translation logic can be shared with the OpenAI-compatible adapter.
+- **Reasoning content:** Thinking is returned as a separate `reasoning_content` field on the assistant message, not as a content block. The adapter must map this to a `THINKING` ContentPart.
+- **Vision via separate models:** Vision capabilities require using a vision-specific model (e.g., `glm-4.6v`). Text-only models like `glm-5` do not accept image inputs.
+- **Tool choice limitations:** Only `"auto"` is currently supported for `tool_choice`. The adapter should raise `UnsupportedToolChoiceError` for `required` and `named` modes.
+- **max_tokens:** Optional. Maximum value varies by model (up to 128K for GLM-5 and GLM-4.7).
+
 ### 7.4Tool Definition Translation
 
-| SDK Format              | OpenAI                                             | Anthropic                                        | Gemini                                             |
-|-------------------------|----------------------------------------------------|-------------------------------------------------|-----------------------------------------------------|
-| Tool.name               | tools[].function.name                              | tools[].name                                     | tools[].functionDeclarations[].name                |
-| Tool.description        | tools[].function.description                       | tools[].description                              | tools[].functionDeclarations[].description         |
-| Tool.parameters         | tools[].function.parameters                        | tools[].input_schema                             | tools[].functionDeclarations[].parameters          |
-| Wrapper structure       | `{"type":"function","function":{...}}`             | `{"name":...,"description":...,"input_schema":...}` | `{"functionDeclarations":[{...}]}`             |
+| SDK Format              | OpenAI                                             | Anthropic                                        | Gemini                                             | Zhipu AI                                      |
+|-------------------------|----------------------------------------------------|-------------------------------------------------|-----------------------------------------------------|-----------------------------------------------|
+| Tool.name               | tools[].function.name                              | tools[].name                                     | tools[].functionDeclarations[].name                | tools[].function.name                         |
+| Tool.description        | tools[].function.description                       | tools[].description                              | tools[].functionDeclarations[].description         | tools[].function.description                  |
+| Tool.parameters         | tools[].function.parameters                        | tools[].input_schema                             | tools[].functionDeclarations[].parameters          | tools[].function.parameters                   |
+| Wrapper structure       | `{"type":"function","function":{...}}`             | `{"name":...,"description":...,"input_schema":...}` | `{"functionDeclarations":[{...}]}`             | `{"type":"function","function":{...}}`        |
 
 ### 7.5 Response Translation
 
@@ -1727,31 +1779,54 @@ Translation:
 
 Note: Gemini typically delivers function calls as complete objects in a single chunk, not incrementally. Emit both TOOL_CALL_START and TOOL_CALL_END for each function call.
 
+#### Zhipu AI Streaming
+
+Zhipu AI uses SSE with `data:` prefixed JSON chunks, matching the OpenAI Chat Completions streaming format.
+
+```
+Provider Format (SSE):
+    data: {"choices": [{"delta": {"reasoning_content": "..."}}]}   -- thinking phase
+    data: {"choices": [{"delta": {"content": "..."}}]}             -- content phase
+    data: {"choices": [{"delta": {"tool_calls": [...]}}]}          -- tool call deltas
+    data: {"choices": [{"finish_reason": "stop"}], "usage": {...}} -- final chunk with usage
+    data: [DONE]                                                    -- stream complete
+
+Translation:
+    delta.reasoning_content present    -> REASONING_DELTA (emit REASONING_START on first)
+    delta.reasoning_content ends       -> REASONING_END
+    delta.content present              -> TEXT_DELTA (emit TEXT_START on first)
+    delta.tool_calls present           -> TOOL_CALL_DELTA (emit TOOL_CALL_START on first)
+    finish_reason present              -> TEXT_END / TOOL_CALL_END as appropriate
+    [DONE]                             -> FINISH with accumulated response
+```
+
+Note: Zhipu AI streams `reasoning_content` deltas before `content` deltas. The adapter must track the transition from reasoning phase to content phase to emit proper REASONING_END and TEXT_START events.
+
 ### 7.8 Provider Quirks Reference
 
 A summary of provider-specific behaviors that adapters must handle:
 
-| Concern                      | OpenAI                           | Anthropic                              | Gemini                              |
-|------------------------------|----------------------------------|----------------------------------------|-------------------------------------|
-| **Native API**               | **Responses API** (`/v1/responses`) | **Messages API** (`/v1/messages`)   | **Gemini API** (`/v1beta/...generateContent`) |
-| System message handling      | `instructions` parameter         | Extracted to `system` parameter        | Extracted to `systemInstruction`    |
-| Developer role               | `instructions` or `developer` role | Merged with system                   | Merged with system                  |
-| Message alternation          | No strict requirement            | Strict user/assistant alternation      | No strict requirement               |
-| Reasoning tokens             | Via `output_tokens_details`; requires Responses API | Via thinking blocks (text visible) | Via `thoughtsTokenCount`          |
-| Tool call IDs                | Provider-assigned unique IDs     | Provider-assigned unique IDs           | No unique IDs (use function name)   |
-| Tool result format           | Separate `tool` role messages    | `tool_result` blocks in user messages  | `functionResponse` in user content  |
-| Tool choice "none"           | `"none"`                         | Omit tools from request entirely       | `"NONE"`                            |
-| max_tokens                   | Optional                         | Required (default to 4096)             | Optional (as `maxOutputTokens`)     |
-| Thinking blocks              | Not exposed (o-series internal)  | `thinking` / `redacted_thinking` blocks| `thought` parts (2.5 models)       |
-| Structured output            | Native json_schema mode          | Prompt engineering or tool extraction  | Native responseSchema               |
-| Streaming protocol           | SSE with `data:` lines           | SSE with event type + data lines       | SSE (with `?alt=sse`) or JSON       |
-| Stream termination           | `data: [DONE]`                   | `message_stop` event                   | Final chunk (no explicit signal)    |
-| Finish reason for tools      | `tool_calls`                     | `tool_use`                             | No dedicated reason (infer from parts)|
-| Image input                  | Data URI in `image_url`          | `base64` source with `media_type`      | `inlineData` with `mimeType`        |
-| Prompt caching               | Automatic (free, 50% discount)   | Requires explicit `cache_control` blocks (90% discount) | Automatic (free prefix caching)   |
-| Beta/feature headers         | N/A (features in request body)   | `anthropic-beta` header (comma-separated) | N/A (features in request body)   |
-| Authentication               | Bearer token in Authorization    | `x-api-key` header                     | `key` query parameter               |
-| API versioning               | Via URL path (/v1/)              | `anthropic-version` header             | Via URL path (/v1beta/)             |
+| Concern                      | OpenAI                           | Anthropic                              | Gemini                              | Zhipu AI                                  |
+|------------------------------|----------------------------------|----------------------------------------|-------------------------------------|--------------------------------------------|
+| **Native API**               | **Responses API** (`/v1/responses`) | **Messages API** (`/v1/messages`)   | **Gemini API** (`/v1beta/...generateContent`) | **Chat Completions** (`/api/paas/v4/chat/completions`) |
+| System message handling      | `instructions` parameter         | Extracted to `system` parameter        | Extracted to `systemInstruction`    | `system` role in messages array           |
+| Developer role               | `instructions` or `developer` role | Merged with system                   | Merged with system                  | Merged with system                        |
+| Message alternation          | No strict requirement            | Strict user/assistant alternation      | No strict requirement               | No strict requirement                     |
+| Reasoning tokens             | Via `output_tokens_details`; requires Responses API | Via thinking blocks (text visible) | Via `thoughtsTokenCount`          | Via `reasoning_content` field (text visible) |
+| Tool call IDs                | Provider-assigned unique IDs     | Provider-assigned unique IDs           | No unique IDs (use function name)   | Provider-assigned unique IDs              |
+| Tool result format           | Separate `tool` role messages    | `tool_result` blocks in user messages  | `functionResponse` in user content  | Separate `tool` role messages             |
+| Tool choice "none"           | `"none"`                         | Omit tools from request entirely       | `"NONE"`                            | Omit tools from request                   |
+| max_tokens                   | Optional                         | Required (default to 4096)             | Optional (as `maxOutputTokens`)     | Optional (up to 128K)                     |
+| Thinking blocks              | Not exposed (o-series internal)  | `thinking` / `redacted_thinking` blocks| `thought` parts (2.5 models)       | `reasoning_content` field on message      |
+| Structured output            | Native json_schema mode          | Prompt engineering or tool extraction  | Native responseSchema               | Native `json_object` mode (no schema enforcement) |
+| Streaming protocol           | SSE with `data:` lines           | SSE with event type + data lines       | SSE (with `?alt=sse`) or JSON       | SSE with `data:` lines                   |
+| Stream termination           | `data: [DONE]`                   | `message_stop` event                   | Final chunk (no explicit signal)    | `data: [DONE]`                            |
+| Finish reason for tools      | `tool_calls`                     | `tool_use`                             | No dedicated reason (infer from parts)| `tool_calls`                             |
+| Image input                  | Data URI in `image_url`          | `base64` source with `media_type`      | `inlineData` with `mimeType`        | Data URI in `image_url` (vision models only) |
+| Prompt caching               | Automatic (free, 50% discount)   | Requires explicit `cache_control` blocks (90% discount) | Automatic (free prefix caching)   | Automatic (~50% discount)                 |
+| Beta/feature headers         | N/A (features in request body)   | `anthropic-beta` header (comma-separated) | N/A (features in request body)   | N/A (features in request body)            |
+| Authentication               | Bearer token in Authorization    | `x-api-key` header                     | `key` query parameter               | Bearer token in Authorization             |
+| API versioning               | Via URL path (/v1/)              | `anthropic-version` header             | Via URL path (/v1beta/)             | Via URL path (/api/paas/v4/)              |
 
 ### 7.9 Adding a New Provider
 
@@ -1960,7 +2035,7 @@ This appendix summarizes key design decisions and the reasoning behind them. The
 
 **Why not retry timed-out requests by default?** Timeouts indicate the operation is inherently slow, not that it failed transiently. Applications can opt in to timeout retries.
 
-**Why use each provider's native API instead of just targeting Chat Completions everywhere?** The Chat Completions API is an OpenAI-specific protocol that other providers partially mimic as a convenience shim. Using it as the universal transport loses critical capabilities: OpenAI's own Responses API exposes reasoning tokens that Chat Completions hides; Anthropic's Messages API supports thinking blocks, prompt caching, and beta headers; Gemini's native API supports grounding and code execution. The unified SDK's value is precisely in abstracting over these different native APIs so callers don't have to. Using a compatibility layer would defeat the purpose.
+**Why use each provider's native API instead of just targeting Chat Completions everywhere?** The Chat Completions API is an OpenAI-specific protocol that other providers partially mimic as a convenience shim. Using it as the universal transport loses critical capabilities: OpenAI's own Responses API exposes reasoning tokens that Chat Completions hides; Anthropic's Messages API supports thinking blocks, prompt caching, and beta headers; Gemini's native API supports grounding and code execution; Zhipu AI's native endpoint exposes `reasoning_content` fields and built-in web search tools that a generic OpenAI-compatible adapter would miss. The unified SDK's value is precisely in abstracting over these different native APIs so callers don't have to. Using a compatibility layer would defeat the purpose.
 
 **Why handle parallel tool execution in the SDK instead of leaving it to the caller?** When a model returns 5 parallel tool calls, the correct behavior is to execute all 5 concurrently, wait for all to complete, and send all 5 results back in one continuation. This is fiddly to implement correctly (error handling, ordering, timeout management) and identical for every consumer. Doing it once in the SDK means coding agents and other downstream tools get it for free.
 
@@ -1983,7 +2058,7 @@ This section defines how to validate that an implementation of this spec is comp
 
 ### 8.2 Provider Adapters
 
-For EACH provider (OpenAI, Anthropic, Gemini), verify:
+For EACH provider (OpenAI, Anthropic, Gemini, Zhipu AI), verify:
 
 - [ ] Adapter uses the provider's **native API** (OpenAI: Responses API, Anthropic: Messages API, Gemini: Gemini API) -- NOT a compatibility shim
 - [ ] Authentication works (API key from env var or explicit config)
@@ -2026,6 +2101,8 @@ For EACH provider (OpenAI, Anthropic, Gemini), verify:
 - [ ] Anthropic extended thinking blocks are returned as `THINKING` content parts when enabled
 - [ ] Thinking block `signature` field is preserved for round-tripping
 - [ ] Gemini thinking tokens (`thoughtsTokenCount`) are mapped to `reasoning_tokens` in `Usage`
+- [ ] Zhipu AI `reasoning_content` is returned as `THINKING` content parts when thinking is enabled
+- [ ] Zhipu AI streaming correctly handles `reasoning_content` deltas before `content` deltas
 - [ ] `Usage` correctly reports `reasoning_tokens` as distinct from `output_tokens`
 
 ### 8.6 Prompt Caching
@@ -2038,7 +2115,9 @@ For EACH provider (OpenAI, Anthropic, Gemini), verify:
 - [ ] **Anthropic**: automatic caching can be disabled via `provider_options.anthropic.auto_cache = false`
 - [ ] **Gemini**: automatic prefix caching works (no client-side configuration needed)
 - [ ] **Gemini**: `Usage.cache_read_tokens` is populated from `usageMetadata.cachedContentTokenCount`
-- [ ] Multi-turn agentic session: verify that turn 5+ shows significant cache_read_tokens (>50% of input tokens) for all three providers
+- [ ] **Zhipu AI**: caching works automatically (no client-side configuration needed)
+- [ ] **Zhipu AI**: `Usage.cache_read_tokens` is populated from `usage.prompt_tokens_details.cached_tokens`
+- [ ] Multi-turn agentic session: verify that turn 5+ shows significant cache_read_tokens (>50% of input tokens) for all four providers
 
 ### 8.7 Tool Calling
 
@@ -2070,23 +2149,23 @@ For EACH provider (OpenAI, Anthropic, Gemini), verify:
 
 Run this validation matrix -- each cell must pass:
 
-| Test Case                                | OpenAI | Anthropic | Gemini |
-|------------------------------------------|--------|-----------|--------|
-| Simple text generation                   | [ ]    | [ ]       | [ ]    |
-| Streaming text generation                | [ ]    | [ ]       | [ ]    |
-| Image input (base64)                     | [ ]    | [ ]       | [ ]    |
-| Image input (URL)                        | [ ]    | [ ]       | [ ]    |
-| Single tool call + execution             | [ ]    | [ ]       | [ ]    |
-| Multiple parallel tool calls             | [ ]    | [ ]       | [ ]    |
-| Multi-step tool loop (3+ rounds)         | [ ]    | [ ]       | [ ]    |
-| Streaming with tool calls                | [ ]    | [ ]       | [ ]    |
-| Structured output (generate_object)      | [ ]    | [ ]       | [ ]    |
-| Reasoning/thinking token reporting       | [ ]    | [ ]       | [ ]    |
-| Error handling (invalid API key -> 401)  | [ ]    | [ ]       | [ ]    |
-| Error handling (rate limit -> 429)       | [ ]    | [ ]       | [ ]    |
-| Usage token counts are accurate          | [ ]    | [ ]       | [ ]    |
-| Prompt caching (cache_read_tokens > 0 on turn 2+) | [ ] | [ ]  | [ ]    |
-| Provider-specific options pass through   | [ ]    | [ ]       | [ ]    |
+| Test Case                                | OpenAI | Anthropic | Gemini | Zhipu AI |
+|------------------------------------------|--------|-----------|--------|----------|
+| Simple text generation                   | [ ]    | [ ]       | [ ]    | [ ]      |
+| Streaming text generation                | [ ]    | [ ]       | [ ]    | [ ]      |
+| Image input (base64)                     | [ ]    | [ ]       | [ ]    | [ ] (vision models only) |
+| Image input (URL)                        | [ ]    | [ ]       | [ ]    | [ ] (vision models only) |
+| Single tool call + execution             | [ ]    | [ ]       | [ ]    | [ ]      |
+| Multiple parallel tool calls             | [ ]    | [ ]       | [ ]    | [ ]      |
+| Multi-step tool loop (3+ rounds)         | [ ]    | [ ]       | [ ]    | [ ]      |
+| Streaming with tool calls                | [ ]    | [ ]       | [ ]    | [ ]      |
+| Structured output (generate_object)      | [ ]    | [ ]       | [ ]    | [ ]      |
+| Reasoning/thinking token reporting       | [ ]    | [ ]       | [ ]    | [ ]      |
+| Error handling (invalid API key -> 401)  | [ ]    | [ ]       | [ ]    | [ ]      |
+| Error handling (rate limit -> 429)       | [ ]    | [ ]       | [ ]    | [ ]      |
+| Usage token counts are accurate          | [ ]    | [ ]       | [ ]    | [ ]      |
+| Prompt caching (cache_read_tokens > 0 on turn 2+) | [ ] | [ ]  | [ ]    | [ ]      |
+| Provider-specific options pass through   | [ ]    | [ ]       | [ ]    | [ ]      |
 
 ### 8.10 Integration Smoke Test
 
@@ -2094,7 +2173,7 @@ The ultimate validation: run this end-to-end test against all three providers wi
 
 ```
 -- 1. Basic generation across all providers
-FOR EACH provider IN ["anthropic", "openai", "gemini"]:
+FOR EACH provider IN ["anthropic", "openai", "gemini", "zhipu"]:
     result = generate(
         model = get_latest_model(provider).id,
         prompt = "Say hello in one sentence.",

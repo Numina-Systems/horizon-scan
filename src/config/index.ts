@@ -4,6 +4,10 @@ import { appConfigSchema } from "./schema";
 import type { AppConfig } from "./schema";
 
 export function loadConfig(configPath: string): AppConfig {
+  if (!configPath?.trim()) {
+    throw new Error("configPath cannot be empty");
+  }
+
   let raw: string;
   try {
     raw = readFileSync(configPath, "utf-8");

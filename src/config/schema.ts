@@ -28,7 +28,6 @@ export const appConfigSchema = z.object({
       "gemini",
       "ollama",
       "lmstudio",
-      "zai",
     ]),
     model: z.string().min(1),
   }),

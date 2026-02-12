@@ -2,9 +2,12 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 
-export function createDatabase(dbPath: string) {
+export function createDatabase(
+  dbPath: string,
+): BetterSQLite3Database<typeof schema> {
   mkdirSync(dirname(dbPath), { recursive: true });
 
   const sqlite = new Database(dbPath);
@@ -14,4 +17,4 @@ export function createDatabase(dbPath: string) {
   return drizzle(sqlite, { schema });
 }
 
-export type AppDatabase = ReturnType<typeof createDatabase>;
+export type AppDatabase = BetterSQLite3Database<typeof schema>;
