@@ -8,15 +8,36 @@ type CustomItem = {
   dcContributor?: string;
 };
 
-const parser = new Parser<Record<string, unknown>, CustomItem>({
-  customFields: {
-    item: [
-      ["prn:industry", "prnIndustry"],
-      ["prn:subject", "prnSubject"],
-      ["dc:contributor", "dcContributor"],
-    ],
-  },
-});
+let parserInstance: Parser<Record<string, unknown>, CustomItem> | null = null;
+
+export function createParser(): Parser<Record<string, unknown>, CustomItem> {
+  return new Parser<Record<string, unknown>, CustomItem>({
+    customFields: {
+      item: [
+        ["prn:industry", "prnIndustry"],
+        ["prn:subject", "prnSubject"],
+        ["dc:contributor", "dcContributor"],
+      ],
+    },
+  });
+}
+
+export function getParserInstance(): Parser<Record<string, unknown>, CustomItem> {
+  if (!parserInstance) {
+    parserInstance = createParser();
+  }
+  return parserInstance;
+}
+
+export function setParserInstance(
+  parser: Parser<Record<string, unknown>, CustomItem>,
+): void {
+  parserInstance = parser;
+}
+
+export function resetParser(): void {
+  parserInstance = null;
+}
 
 export async function pollFeed(
   feedName: string,
@@ -24,6 +45,7 @@ export async function pollFeed(
   logger: Logger,
 ): Promise<PollResult> {
   try {
+    const parser = getParserInstance();
     const feed = await parser.parseURL(feedUrl);
 
     const items: Array<ParsedRssItem> = feed.items.map((item) => {
