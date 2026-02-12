@@ -1,3 +1,4 @@
+// pattern: imperative-shell
 import { eq, and, isNull, isNotNull } from "drizzle-orm";
 import type { Logger } from "pino";
 import type { AppDatabase } from "../db";
@@ -51,12 +52,14 @@ export function extractPendingArticles(
       }
 
       const result = extractContent(
+        // safe: query filters isNotNull(articles.rawHtml)
         row.rawHtml as string,
         feed.extractorConfig,
         logger,
       );
 
       // Merge JSON-LD data with existing RSS metadata
+      // safe: metadata column stores JSON as unknown; nullish coalesce handles null/undefined
       const existingMetadata =
         (row.articleMetadata as Record<string, unknown>) ?? {};
       const mergedMetadata = {

@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import pino from "pino";
 import { extractPendingArticles } from "./extract-articles";
+import * as extractorModule from "./extractor";
 import { createTestDatabase, seedTestFeed } from "../test-utils/db";
 import type { AppDatabase } from "../db";
 import { articles } from "../db/schema";
@@ -202,7 +203,7 @@ describe("extractPendingArticles", () => {
       </html>
     `;
 
-    // Insert two articles - one that will be extracted successfully
+    // Insert two articles: one will fail extraction, one will succeed
     db.insert(articles)
       .values({
         feedId,
@@ -223,6 +224,17 @@ describe("extractPendingArticles", () => {
       })
       .run();
 
+    // Mock extractContent to throw for the first article
+    let callCount = 0;
+    const originalExtractContent = extractorModule.extractContent;
+    vi.spyOn(extractorModule, "extractContent").mockImplementation((html, config, logger) => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error("Simulated extraction error");
+      }
+      return originalExtractContent(html, config, logger);
+    });
+
     extractPendingArticles(db, logger);
 
     const article1 = db
@@ -236,8 +248,12 @@ describe("extractPendingArticles", () => {
       .where(eq(articles.guid, "test-6b"))
       .get();
 
-    expect(article1?.extractedText).toBe("Valid article");
+    // First article should not have extractedText due to error
+    expect(article1?.extractedText).toBeNull();
+    // Second article should be extracted successfully despite first article's error
     expect(article2?.extractedText).toBe("Valid article");
+
+    vi.restoreAllMocks();
   });
 
   it("should skip articles with null rawHtml but extractedText set", () => {
@@ -295,7 +311,7 @@ describe("extractPendingArticles", () => {
       },
     });
 
-    // Create two articles, both will extract successfully
+    // Create two articles: first will fail extraction, second will succeed
     db.insert(articles)
       .values({
         feedId,
@@ -316,6 +332,17 @@ describe("extractPendingArticles", () => {
       })
       .run();
 
+    // Mock extractContent to throw for the first article, succeed for the second
+    let callCount = 0;
+    const originalExtractContent = extractorModule.extractContent;
+    vi.spyOn(extractorModule, "extractContent").mockImplementation((html, config, logger) => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error("Simulated extraction error for first article");
+      }
+      return originalExtractContent(html, config, logger);
+    });
+
     extractPendingArticles(db, logger);
 
     const article1 = db
@@ -329,8 +356,12 @@ describe("extractPendingArticles", () => {
       .where(eq(articles.guid, "test-9b"))
       .get();
 
-    expect(article1?.extractedText).toBe("Article 9a");
+    // First article failed extraction, so no extractedText
+    expect(article1?.extractedText).toBeNull();
+    // Second article should still be extracted despite first article's error
     expect(article2?.extractedText).toBe("Article 9b");
+
+    vi.restoreAllMocks();
   });
 
   it("should extract text from multiple articles in one cycle", () => {

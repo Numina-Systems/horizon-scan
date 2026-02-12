@@ -1,3 +1,4 @@
+// pattern: functional-core
 import * as cheerio from "cheerio";
 import type { Logger } from "pino";
 import type { ExtractorConfig } from "../db/schema";
@@ -39,6 +40,7 @@ export function extractContent(
         if (raw) {
           const parsed: unknown = JSON.parse(raw);
           if (typeof parsed === "object" && parsed !== null) {
+            // safe: checked typeof === 'object' && !== null above
             jsonLdData.push(parsed as Record<string, unknown>);
           }
         }

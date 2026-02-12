@@ -1,3 +1,4 @@
+// pattern: imperative-shell
 import { eq, and, lt, isNull } from "drizzle-orm";
 import type { Logger } from "pino";
 import pLimit from "p-limit";
@@ -5,7 +6,7 @@ import type { AppDatabase } from "../db";
 import type { AppConfig } from "../config";
 import { articles } from "../db/schema";
 
-type FetchResult =
+export type FetchResult =
   | { success: true; html: string; url: string }
   | { success: false; error: string; url: string };
 
@@ -45,6 +46,7 @@ export async function fetchArticle(
 }
 
 const MAX_RETRIES = 3;
+const FETCH_TIMEOUT_MS = 15_000;
 
 /**
  * Fetches pending articles from the database with concurrency limiting and per-domain delay.
@@ -97,7 +99,7 @@ export async function fetchPendingArticles(
 
       domainLastFetch.set(domain, Date.now());
 
-      const result = await fetchArticle(article.url, 15000, logger);
+      const result = await fetchArticle(article.url, FETCH_TIMEOUT_MS, logger);
 
       if (result.success) {
         db.update(articles)
