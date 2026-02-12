@@ -219,7 +219,7 @@ describe("assessments router", () => {
 
     const result = await caller.assessments.list({});
     expect(result).toHaveLength(1);
-    const assessment = result[0];
+    const assessment = result[0]!;
 
     expect(assessment).toMatchObject({
       articleId,
