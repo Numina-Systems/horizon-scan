@@ -1,15 +1,17 @@
 services:
   horizon-scan:
     build: .
+    env_file:
+      - .env
     ports:
-      - "3000:3000"
+      - "3001:3001"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - horizon-scan-data:/app/data
     environment:
       - DATABASE_URL=/app/data/horizon-scan.db
       - CONFIG_PATH=/app/config.yaml
-      - PORT=3000
+      - PORT=3001
       - LOG_LEVEL=info
       # LLM provider keys — uncomment and set as needed:
       # - ANTHROPIC_API_KEY=

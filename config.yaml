@@ -1,30 +1,30 @@
 llm:
   provider: ollama
-  model: llama3.2
+  model: olmo-3:7b-think
 
 feeds:
-  - name: PRNewswire - Technology
-    url: https://www.prnewswire.com/rss/technology-latest-news.rss
+  - name: PRNewswire - BizTech
+    url: https://www.prnewswire.com/rss/business-technology-latest-news/business-technology-latest-news-list.rss
+    extractorConfig:
+      bodySelector: "p.prnews_p"
+      jsonLd: true
+  - name: PRNewswire - Health
+    url: https://www.prnewswire.com/rss/health-latest-news/health-latest-news-list.rss
     extractorConfig:
       bodySelector: "p.prnews_p"
       jsonLd: true
 
 topics:
-  - name: AI and Machine Learning
+  - name: Real World Evidence
     description: >-
-      Articles about artificial intelligence, machine learning, deep learning,
-      neural networks, large language models, and AI applications in industry.
-  - name: Cloud Computing
-    description: >-
-      Articles about cloud infrastructure, cloud services (AWS, Azure, GCP),
-      serverless computing, and cloud-native technologies.
+      Articles about sources of real world evidence for clinical trials, health economics and outcomes research, and observational studies.
 
 schedule:
-  poll: "*/15 * * * *"
-  digest: "0 8 * * 1-5"
+  poll: "*/30 * * * *"
+  digest: "0 18 * * 1-5"
 
 digest:
-  recipient: user@example.com
+  recipient: user@email.com
 
 extraction:
   maxConcurrency: 2
