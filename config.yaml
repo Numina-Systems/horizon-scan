@@ -1,0 +1,34 @@
+llm:
+  provider: ollama
+  model: llama3.2
+
+feeds:
+  - name: PRNewswire - Technology
+    url: https://www.prnewswire.com/rss/technology-latest-news.rss
+    extractorConfig:
+      bodySelector: "p.prnews_p"
+      jsonLd: true
+
+topics:
+  - name: AI and Machine Learning
+    description: >-
+      Articles about artificial intelligence, machine learning, deep learning,
+      neural networks, large language models, and AI applications in industry.
+  - name: Cloud Computing
+    description: >-
+      Articles about cloud infrastructure, cloud services (AWS, Azure, GCP),
+      serverless computing, and cloud-native technologies.
+
+schedule:
+  poll: "*/15 * * * *"
+  digest: "0 8 * * 1-5"
+
+digest:
+  recipient: user@example.com
+
+extraction:
+  maxConcurrency: 2
+  perDomainDelayMs: 1000
+
+assessment:
+  maxArticleLength: 4000
