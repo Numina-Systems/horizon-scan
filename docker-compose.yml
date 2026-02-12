@@ -1,0 +1,26 @@
+services:
+  horizon-scan:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - horizon-scan-data:/app/data
+    environment:
+      - DATABASE_URL=/app/data/horizon-scan.db
+      - CONFIG_PATH=/app/config.yaml
+      - PORT=3000
+      - LOG_LEVEL=info
+      # LLM provider keys — uncomment and set as needed:
+      # - ANTHROPIC_API_KEY=
+      # - OPENAI_API_KEY=
+      # - GEMINI_API_KEY=
+      # - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # - LMSTUDIO_BASE_URL=http://host.docker.internal:1234/v1
+      # Email delivery:
+      # - MAILGUN_API_KEY=
+      # - MAILGUN_DOMAIN=
+    restart: unless-stopped
+
+volumes:
+  horizon-scan-data:
