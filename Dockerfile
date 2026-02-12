@@ -6,7 +6,7 @@ RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
 COPY tsconfig.json ./
@@ -22,7 +22,7 @@ RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 RUN npm ci --omit=dev
 
 # Stage 3: Runtime (no build tools)
@@ -45,6 +45,10 @@ COPY --from=builder /app/drizzle ./drizzle
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data
+
+# Run as non-root user
+RUN chown -R node:node /app/data
+USER node
 
 ENV NODE_ENV=production
 ENV PORT=3000
