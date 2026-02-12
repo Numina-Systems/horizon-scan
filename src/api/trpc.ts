@@ -1,3 +1,4 @@
+// pattern: Imperative Shell
 import { initTRPC } from "@trpc/server";
 import type { AppContext } from "./context";
 

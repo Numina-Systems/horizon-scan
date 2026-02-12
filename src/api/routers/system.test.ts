@@ -1,28 +1,20 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createCallerFactory } from "../trpc";
-import pino from "pino";
-import { appRouter } from "../router";
 import {
   createTestDatabase,
   seedTestFeed,
   seedTestTopic,
   createTestConfig,
+  createTestCaller,
 } from "../../test-utils/db";
 import type { AppDatabase } from "../../db";
-import type { AppConfig } from "../../config";
-import type { AppContext } from "../context";
 
 describe("system router", () => {
   let db: AppDatabase;
-  let caller: any;
-  const config = createTestConfig();
-  const logger = pino({ level: "silent" });
+  let caller: ReturnType<typeof createTestCaller>;
 
   beforeEach(() => {
     db = createTestDatabase();
-    const createCaller = createCallerFactory(appRouter);
-    const context: AppContext = { db, config, logger };
-    caller = createCaller(context);
+    caller = createTestCaller(db);
   });
 
   it("should return system status with config data (AC5.3)", async () => {
@@ -69,34 +61,25 @@ describe("system router", () => {
   });
 
   it("should return digestCron as raw cron expression string (AC5.3)", async () => {
-    const customConfig: AppConfig = {
-      ...config,
+    const baseConfig = createTestConfig();
+    const customCaller = createTestCaller(db, {
       schedule: {
-        ...config.schedule,
+        ...baseConfig.schedule,
         digest: "0 18 * * 1-5",
       },
-    };
-
-    const createCaller = createCallerFactory(appRouter);
-    const context: AppContext = { db, config: customConfig, logger };
-    const customCaller = createCaller(context);
+    });
 
     const result = await customCaller.system.status();
     expect(result.digestCron).toBe("0 18 * * 1-5");
   });
 
   it("should return LLM provider and model from config (AC5.3)", async () => {
-    const customConfig: AppConfig = {
-      ...config,
+    const customCaller = createTestCaller(db, {
       llm: {
         provider: "openai",
         model: "gpt-4",
       },
-    };
-
-    const createCaller = createCallerFactory(appRouter);
-    const context: AppContext = { db, config: customConfig, logger };
-    const customCaller = createCaller(context);
+    });
 
     const result = await customCaller.system.status();
     expect(result.provider).toBe("openai");

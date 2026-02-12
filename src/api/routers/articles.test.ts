@@ -1,27 +1,20 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createCallerFactory } from "../trpc";
-import pino from "pino";
-import { appRouter } from "../router";
 import {
   createTestDatabase,
   seedTestFeed,
   seedTestArticle,
-  createTestConfig,
+  createTestCaller,
 } from "../../test-utils/db";
 import type { AppDatabase } from "../../db";
-import type { AppContext } from "../context";
+import type { AppRouter } from "../router";
 
 describe("articles router", () => {
   let db: AppDatabase;
-  let caller: any;
-  const config = createTestConfig();
-  const logger = pino({ level: "silent" });
+  let caller: ReturnType<typeof createTestCaller>;
 
   beforeEach(() => {
     db = createTestDatabase();
-    const createCaller = createCallerFactory(appRouter);
-    const context: AppContext = { db, config, logger };
-    caller = createCaller(context);
+    caller = createTestCaller(db);
   });
 
   it("should return empty list initially (AC5.1)", async () => {

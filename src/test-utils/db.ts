@@ -3,6 +3,9 @@ import { createDatabase } from "../db";
 import type { AppDatabase } from "../db";
 import type { AppConfig } from "../config";
 import { feeds, articles, topics, assessments } from "../db/schema";
+import { createCallerFactory } from "../api/trpc";
+import { appRouter } from "../api/router";
+import pino from "pino";
 
 /**
  * Creates an in-memory SQLite test database with all migrations applied.
@@ -181,10 +184,6 @@ export function createTestCaller(
   db: AppDatabase,
   configOverrides?: Partial<AppConfig>,
 ) {
-  const { createCallerFactory } = require("../api/trpc");
-  const { appRouter } = require("../api/router");
-  const pino = require("pino");
-
   const createCaller = createCallerFactory(appRouter);
   const config = { ...createTestConfig(), ...configOverrides };
   const logger = pino({ level: "silent" });
