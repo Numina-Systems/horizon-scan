@@ -7,6 +7,8 @@ import type { AppConfig } from "./config";
 import { feeds } from "./db/schema";
 import { pollFeed } from "./pipeline/poller";
 import { deduplicateAndStore } from "./pipeline/dedup";
+import { runDigestCycle } from "./digest/orchestrator";
+import type { SendDigestFn } from "./digest/sender";
 
 export type PollScheduler = {
   readonly stop: () => void;
@@ -62,6 +64,31 @@ export function createPollScheduler(
       }
 
       logger.info("poll cycle complete");
+    },
+  );
+
+  return {
+    stop: () => {
+      task.stop();
+    },
+  };
+}
+
+export function createDigestScheduler(
+  db: AppDatabase,
+  config: AppConfig,
+  sendDigest: SendDigestFn,
+  logger: Logger,
+): PollScheduler {
+  const task: ScheduledTask = cron.schedule(
+    config.schedule.digest,
+    async () => {
+      try {
+        await runDigestCycle(db, config, sendDigest, logger);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error({ error: message }, "digest cycle failed unexpectedly");
+      }
     },
   );
 
