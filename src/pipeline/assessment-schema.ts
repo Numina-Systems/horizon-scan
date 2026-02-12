@@ -16,4 +16,4 @@ export const assessmentOutputSchema = z.object({
     .default([]),
 });
 
-export type AssessmentOutput = z.infer<typeof assessmentOutputSchema>;
+export type AssessmentOutput = Readonly<z.infer<typeof assessmentOutputSchema>>;

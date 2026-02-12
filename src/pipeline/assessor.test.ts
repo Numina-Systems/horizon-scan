@@ -110,8 +110,6 @@ describe("assessor", () => {
       })
       .run();
 
-    const articleId = 1;
-
     // Mock successful LLM response
     vi.mocked(generateText).mockResolvedValueOnce({
       experimental_output: {

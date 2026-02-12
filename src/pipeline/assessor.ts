@@ -11,37 +11,33 @@ import {
   type AssessmentOutput,
 } from "./assessment-schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AssessmentTopic = {
+  readonly name: string;
+  readonly description: string;
+};
+
 async function callLlmForAssessment(
   model: LanguageModel,
-  topic: { name: string; description: string },
+  topic: AssessmentTopic,
   articleText: string,
 ): Promise<AssessmentOutput> {
-  // Build params dynamically to avoid type inference issues
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const params: any = {};
-  params.model = model;
-  params.system = `You are a relevance assessor. Evaluate whether the article is relevant to the given topic. Return structured JSON with the relevant, summary, and tags fields.`;
-  params.prompt = `Topic: ${topic.name}\nDescription: ${topic.description}\n\nArticle:\n${articleText}`;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  params.output = (Output.object as any)({ schema: assessmentOutputSchema });
+  // @ts-expect-error TS2589: Output.object triggers excessive type depth with generateText
+  const output = Output.object({ schema: assessmentOutputSchema });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const response: any = await generateText(params);
+  const response = await generateText({
+    model,
+    output,
+    system: `You are a relevance assessor. Evaluate whether the article is relevant to the given topic. Return structured JSON with the relevant, summary, and tags fields.`,
+    prompt: `Topic: ${topic.name}\nDescription: ${topic.description}\n\nArticle:\n${articleText}`,
+  });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = response.experimental_output as any;
+  const result = response.experimental_output as AssessmentOutput;
 
   if (!result || typeof result !== "object") {
     throw new Error("LLM returned invalid result");
   }
 
-  const resultObj = result as Record<string, unknown>;
-  return {
-    relevant: resultObj["relevant"] as boolean,
-    summary: (resultObj["summary"] as string) ?? "",
-    tags: (resultObj["tags"] as Array<string>) ?? [],
-  };
+  return result;
 }
 
 /**
@@ -54,7 +50,6 @@ async function callLlmForAssessment(
  * @param config - Application configuration with assessment.maxArticleLength.
  * @param logger - Logger instance for debug and error messages.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function assessPendingArticles(
   db: AppDatabase,
   model: LanguageModel,

@@ -14,7 +14,7 @@ const lmstudio = createOpenAICompatible({
   baseURL: process.env["LMSTUDIO_BASE_URL"] ?? "http://localhost:1234/v1",
 });
 
-type ProviderName = "anthropic" | "openai" | "gemini" | "ollama" | "lmstudio";
+export type ProviderName = "anthropic" | "openai" | "gemini" | "ollama" | "lmstudio";
 
 export function getModel(provider: ProviderName, modelId: string): LanguageModel {
   switch (provider) {
