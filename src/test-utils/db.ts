@@ -1,7 +1,8 @@
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { createDatabase } from "../db";
 import type { AppDatabase } from "../db";
-import { feeds } from "../db/schema";
+import type { AppConfig } from "../config";
+import { feeds, articles, topics, assessments } from "../db/schema";
 
 /**
  * Creates an in-memory SQLite test database with all migrations applied.
@@ -38,4 +39,133 @@ export function seedTestFeed(
     .get();
 
   return result.id;
+}
+
+/**
+ * Seeds a test article into the database with optional field overrides.
+ * @param db - The AppDatabase instance to seed into.
+ * @param feedId - The feed ID to associate with the article.
+ * @param overrides - Optional Partial to override default test article values.
+ * @returns The ID of the inserted article.
+ */
+export function seedTestArticle(
+  db: AppDatabase,
+  feedId: number,
+  overrides?: Partial<typeof articles.$inferInsert>,
+): number {
+  const result = db
+    .insert(articles)
+    .values({
+      feedId,
+      guid: `guid-${Date.now()}-${Math.random()}`,
+      title: "Test Article",
+      url: "https://example.com/article",
+      status: "pending_assessment",
+      ...overrides,
+    })
+    .returning({ id: articles.id })
+    .get();
+
+  return result.id;
+}
+
+/**
+ * Seeds a test topic into the database with optional field overrides.
+ * @param db - The AppDatabase instance to seed into.
+ * @param overrides - Optional Partial to override default test topic values.
+ * @returns The ID of the inserted topic.
+ */
+export function seedTestTopic(
+  db: AppDatabase,
+  overrides?: Partial<typeof topics.$inferInsert>,
+): number {
+  const result = db
+    .insert(topics)
+    .values({
+      name: "Test Topic",
+      description: "A test topic",
+      ...overrides,
+    })
+    .returning({ id: topics.id })
+    .get();
+
+  return result.id;
+}
+
+/**
+ * Seeds a test assessment into the database with optional field overrides.
+ * @param db - The AppDatabase instance to seed into.
+ * @param articleId - The article ID to assess.
+ * @param topicId - The topic ID for the assessment.
+ * @param overrides - Optional Partial to override default test assessment values.
+ * @returns The ID of the inserted assessment.
+ */
+export function seedTestAssessment(
+  db: AppDatabase,
+  articleId: number,
+  topicId: number,
+  overrides?: Partial<typeof assessments.$inferInsert>,
+): number {
+  const result = db
+    .insert(assessments)
+    .values({
+      articleId,
+      topicId,
+      relevant: false,
+      tags: [],
+      modelUsed: "test-model",
+      provider: "test-provider",
+      assessedAt: new Date(),
+      ...overrides,
+    })
+    .returning({ id: assessments.id })
+    .get();
+
+  return result.id;
+}
+
+/**
+ * Creates a default AppConfig suitable for testing.
+ * @returns An AppConfig instance with all required fields.
+ */
+export function createTestConfig(): AppConfig {
+  return {
+    llm: {
+      provider: "anthropic",
+      model: "claude-3-5-sonnet-20241022",
+    },
+    feeds: [
+      {
+        name: "Example Feed",
+        url: "https://example.com/rss",
+        extractorConfig: {
+          bodySelector: "article",
+          jsonLd: true,
+        },
+        pollIntervalMinutes: 15,
+        enabled: true,
+      },
+    ],
+    topics: [
+      {
+        name: "Technology",
+        description: "Technology news",
+        enabled: true,
+      },
+    ],
+    schedule: {
+      poll: "*/15 * * * *",
+      digest: "0 9 * * *",
+    },
+    digest: {
+      recipient: "test@example.com",
+    },
+    extraction: {
+      maxConcurrency: 2,
+      perDomainDelayMs: 1000,
+    },
+    assessment: {
+      maxArticleLength: 4000,
+    },
+  };
 }
