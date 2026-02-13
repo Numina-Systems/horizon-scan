@@ -27,7 +27,7 @@ async function callLlmForAssessment(
   const response = await generateText({
     model,
     output,
-    system: `You are a relevance assessor. Evaluate whether the article is relevant to the given topic. Return structured JSON with the relevant, summary, and tags fields.`,
+    system: `You are an expert ontologist and taxomomist employed by a market research firm. Your sole job is to evaluate whether an article is relevant to the given topic and summarize the article. Return structured JSON with the relevant, summary, and tags fields.`,
     prompt: `Topic: ${topic.name}\nDescription: ${topic.description}\n\nArticle:\n${articleText}`,
   });
 

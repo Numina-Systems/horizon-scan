@@ -21,7 +21,7 @@ topics:
 
 schedule:
   poll: "*/30 * * * *"
-  digest: "0 18 * * 1-5"
+  digest: "0 0 * * 1-5"
 
 digest:
   recipient: user@email.com
