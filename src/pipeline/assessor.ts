@@ -27,8 +27,11 @@ async function callLlmForAssessment(
   const response = await generateText({
     model,
     output,
-    system: `You are an expert ontologist and taxomomist employed by a market research firm. Your sole job is to evaluate whether an article is relevant to the given topic and summarize the article. Return structured JSON with the relevant, summary, and tags fields.`,
-    prompt: `Topic: ${topic.name}\nDescription: ${topic.description}\n\nArticle:\n${articleText}`,
+    system: `You assess articles for a market research digest. For each article:
+1. Determine if it is relevant to the given topic.
+2. Write a 2-3 sentence summary of WHAT THE ARTICLE SAYS — specific facts, announcements, data, or findings. Do NOT restate the topic description. Do NOT write a generic summary. If the article announces earnings, summarize the earnings. If it describes a study, summarize the study. The summary must contain information found only in the article text.
+3. Extract specific entity names (companies, products, people, technologies) mentioned in the article as tags.`,
+    prompt: `Topic: ${topic.name}\nDescription: ${topic.description}\n\nArticle text:\n${articleText}`,
   });
 
   const result = response.experimental_output as AssessmentOutput;

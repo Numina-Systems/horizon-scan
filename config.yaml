@@ -1,6 +1,6 @@
 llm:
   provider: ollama
-  model: olmo-3:7b-think
+  model: qwen3.5:9b
 
 feeds:
   - name: PRNewswire - BizTech
@@ -20,8 +20,8 @@ topics:
       Articles about sources of real world evidence for clinical trials, health economics and outcomes research, and observational studies.
 
 schedule:
-  poll: "*/30 * * * *"
-  digest: "0 0 * * 1-5"
+  poll: "*/60 * * * *"
+  digest: "0 14 * * 1-5"
 
 digest:
   recipient: user@email.com
@@ -31,4 +31,4 @@ extraction:
   perDomainDelayMs: 1000
 
 assessment:
-  maxArticleLength: 4000
+  maxArticleLength: 8000

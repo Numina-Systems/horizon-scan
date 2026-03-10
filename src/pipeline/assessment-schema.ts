@@ -5,13 +5,13 @@ export const assessmentOutputSchema = z.object({
   summary: z
     .string()
     .describe(
-      "2-3 sentence summary of the article's relevance. Empty string if not relevant."
+      "2-3 sentence summary of the article's specific content — facts, announcements, data, or findings. Must not restate the topic description. Empty string if not relevant."
     )
     .default(""),
   tags: z
     .array(z.string())
     .describe(
-      "Entity tags extracted from the article (companies, technologies, people). Empty array if not relevant."
+      "Specific entity names from the article: company names, product names, person names, technology names. Empty array if not relevant."
     )
     .default([]),
 });

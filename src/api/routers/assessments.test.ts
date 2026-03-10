@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import {
   createTestDatabase,
   seedTestFeed,
@@ -7,6 +8,7 @@ import {
   seedTestAssessment,
   createTestCaller,
 } from "../../test-utils/db";
+import { articles } from "../../db/schema";
 import type { AppDatabase } from "../../db";
 
 describe("assessments router", () => {
@@ -200,6 +202,102 @@ describe("assessments router", () => {
 
     const result = await caller.assessments.getByArticle({ articleId: articleId });
     expect(result).toEqual([]);
+  });
+
+  describe("reassess", () => {
+    it("should delete assessments and reset article status for a specific article", async () => {
+      const feedId = seedTestFeed(db);
+      const articleId = seedTestArticle(db, feedId, { status: "assessed" });
+      const topicId = seedTestTopic(db);
+      seedTestAssessment(db, articleId, topicId, { relevant: true });
+
+      const result = await caller.assessments.reassess({ articleId });
+
+      expect(result.assessmentsDeleted).toBe(1);
+      expect(result.articlesReset).toBe(1);
+
+      const remaining = await caller.assessments.list({ articleId });
+      expect(remaining).toHaveLength(0);
+
+      const [article] = db
+        .select({ status: articles.status, retryCount: articles.assessmentRetryCount })
+        .from(articles)
+        .where(eq(articles.id, articleId))
+        .all();
+      expect(article!.status).toBe("pending_assessment");
+      expect(article!.retryCount).toBe(0);
+    });
+
+    it("should delete assessments and reset all assessed articles when no articleId given", async () => {
+      const feedId = seedTestFeed(db);
+      const article1Id = seedTestArticle(db, feedId, { status: "assessed" });
+      const article2Id = seedTestArticle(db, feedId, { status: "assessed" });
+      const article3Id = seedTestArticle(db, feedId, { status: "pending_assessment" });
+      const topicId = seedTestTopic(db);
+      seedTestAssessment(db, article1Id, topicId, { relevant: true });
+      seedTestAssessment(db, article2Id, topicId, { relevant: false });
+
+      const result = await caller.assessments.reassess({});
+
+      expect(result.assessmentsDeleted).toBe(2);
+      expect(result.articlesReset).toBe(2);
+
+      const allAssessments = await caller.assessments.list({});
+      expect(allAssessments).toHaveLength(0);
+
+      const statuses = db
+        .select({ id: articles.id, status: articles.status })
+        .from(articles)
+        .all();
+      expect(statuses.every((a) => a.status === "pending_assessment")).toBe(true);
+    });
+
+    it("should also reset failed articles when includeFailed is true", async () => {
+      const feedId = seedTestFeed(db);
+      const assessedId = seedTestArticle(db, feedId, { status: "assessed" });
+      const failedId = seedTestArticle(db, feedId, { status: "failed", assessmentRetryCount: 3 });
+      const topicId = seedTestTopic(db);
+      seedTestAssessment(db, assessedId, topicId, { relevant: true });
+      seedTestAssessment(db, failedId, topicId, { relevant: false });
+
+      const result = await caller.assessments.reassess({ includeFailed: true });
+
+      expect(result.assessmentsDeleted).toBe(2);
+      expect(result.articlesReset).toBe(2);
+
+      const [failed] = db
+        .select({ status: articles.status, retryCount: articles.assessmentRetryCount })
+        .from(articles)
+        .where(eq(articles.id, failedId))
+        .all();
+      expect(failed!.status).toBe("pending_assessment");
+      expect(failed!.retryCount).toBe(0);
+    });
+
+    it("should not reset failed articles by default", async () => {
+      const feedId = seedTestFeed(db);
+      const failedId = seedTestArticle(db, feedId, { status: "failed", assessmentRetryCount: 3 });
+      const topicId = seedTestTopic(db);
+      seedTestAssessment(db, failedId, topicId, { relevant: false });
+
+      const result = await caller.assessments.reassess({});
+
+      expect(result.assessmentsDeleted).toBe(0);
+      expect(result.articlesReset).toBe(0);
+
+      const [failed] = db
+        .select({ status: articles.status })
+        .from(articles)
+        .where(eq(articles.id, failedId))
+        .all();
+      expect(failed!.status).toBe("failed");
+    });
+
+    it("should return zero counts when no articles match", async () => {
+      const result = await caller.assessments.reassess({});
+      expect(result.assessmentsDeleted).toBe(0);
+      expect(result.articlesReset).toBe(0);
+    });
   });
 
   it("should include all assessment fields in response (AC5.1)", async () => {

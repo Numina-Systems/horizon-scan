@@ -1,8 +1,8 @@
 // pattern: Imperative Shell
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc";
-import { assessments } from "../../db/schema";
-import { eq, and } from "drizzle-orm";
+import { articles, assessments } from "../../db/schema";
+import { eq, and, inArray, or } from "drizzle-orm";
 
 /**
  * tRPC router for reading assessments.
@@ -44,5 +44,51 @@ export const assessmentsRouter = router({
         .from(assessments)
         .where(eq(assessments.articleId, input.articleId))
         .all();
+    }),
+
+  reassess: publicProcedure
+    .input(
+      z.object({
+        articleId: z.number().optional(),
+        includeFailed: z.boolean().optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) => {
+      const statusConditions = input.includeFailed
+        ? or(eq(articles.status, "assessed"), eq(articles.status, "failed"))
+        : eq(articles.status, "assessed");
+
+      const articleCondition = input.articleId
+        ? and(eq(articles.id, input.articleId), statusConditions)
+        : statusConditions;
+
+      const matchingArticles = ctx.db
+        .select({ id: articles.id })
+        .from(articles)
+        .where(articleCondition)
+        .all();
+
+      if (matchingArticles.length === 0) {
+        return { assessmentsDeleted: 0, articlesReset: 0 };
+      }
+
+      const articleIds = matchingArticles.map((a) => a.id);
+
+      const deleted = ctx.db
+        .delete(assessments)
+        .where(inArray(assessments.articleId, articleIds))
+        .returning({ id: assessments.id })
+        .all();
+
+      ctx.db
+        .update(articles)
+        .set({ status: "pending_assessment", assessmentRetryCount: 0 })
+        .where(inArray(articles.id, articleIds))
+        .run();
+
+      return {
+        assessmentsDeleted: deleted.length,
+        articlesReset: articleIds.length,
+      };
     }),
 });
