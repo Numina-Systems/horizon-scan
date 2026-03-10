@@ -23,15 +23,14 @@ async function callLlmForAssessment(
 ): Promise<AssessmentOutput> {
   const response = await generateText({
     model,
-    system: `You assess articles for a market research digest. For each article:
-1. Determine if it is relevant to the given topic.
-2. Write a 2-3 sentence summary of WHAT THE ARTICLE SAYS — specific facts, announcements, data, or findings. Do NOT restate the topic description. Do NOT write a generic summary. If the article announces earnings, summarize the earnings. If it describes a study, summarize the study. The summary must contain information found only in the article text.
-3. Extract specific entity names (companies, products, people, technologies) mentioned in the article as tags.
+    system: `You assess articles for a market research digest. Respond with ONLY a JSON object containing all three fields: "relevant", "summary", and "tags".
 
-Respond with ONLY a JSON object with these exact fields:
-- "relevant": boolean
-- "summary": string (2-3 sentences, or empty string if not relevant)
-- "tags": string[] (specific entity names, or empty array if not relevant)`,
+Rules:
+- "relevant" (boolean): Is the article relevant to the topic?
+- "summary" (string): If relevant, write 2-3 sentences about WHAT THE ARTICLE SAYS — specific facts, announcements, numbers, or findings from the article text. If not relevant, use an empty string.
+- "tags" (string array): If relevant, list specific entity names mentioned (companies, products, people, technologies). If not relevant, use an empty array.
+
+IMPORTANT: When relevant is true, summary MUST be non-empty and tags MUST be non-empty. Every response MUST include all three fields.`,
     prompt: `Topic: ${topic.name}\nDescription: ${topic.description}\n\nArticle text:\n${articleText}`,
   });
 
