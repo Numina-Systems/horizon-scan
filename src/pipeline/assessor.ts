@@ -1,5 +1,5 @@
 // pattern: imperative-shell
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 import { and, eq, isNotNull, lt } from "drizzle-orm";
 import type { Logger } from "pino";
 import type { LanguageModel } from "ai";
@@ -21,25 +21,22 @@ async function callLlmForAssessment(
   topic: AssessmentTopic,
   articleText: string,
 ): Promise<AssessmentOutput> {
-  // @ts-expect-error TS2589: Output.object triggers excessive type depth with generateText
-  const output = Output.object({ schema: assessmentOutputSchema });
-
   const response = await generateText({
     model,
-    output,
     system: `You assess articles for a market research digest. For each article:
 1. Determine if it is relevant to the given topic.
 2. Write a 2-3 sentence summary of WHAT THE ARTICLE SAYS — specific facts, announcements, data, or findings. Do NOT restate the topic description. Do NOT write a generic summary. If the article announces earnings, summarize the earnings. If it describes a study, summarize the study. The summary must contain information found only in the article text.
-3. Extract specific entity names (companies, products, people, technologies) mentioned in the article as tags.`,
+3. Extract specific entity names (companies, products, people, technologies) mentioned in the article as tags.
+
+Respond with ONLY a JSON object with these exact fields:
+- "relevant": boolean
+- "summary": string (2-3 sentences, or empty string if not relevant)
+- "tags": string[] (specific entity names, or empty array if not relevant)`,
     prompt: `Topic: ${topic.name}\nDescription: ${topic.description}\n\nArticle text:\n${articleText}`,
   });
 
-  const result = response.experimental_output as AssessmentOutput;
-
-  if (!result || typeof result !== "object") {
-    throw new Error("LLM returned invalid result");
-  }
-
+  const parsed = JSON.parse(response.text);
+  const result = assessmentOutputSchema.parse(parsed);
   return result;
 }
 

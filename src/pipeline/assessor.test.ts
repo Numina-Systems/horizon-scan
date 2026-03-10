@@ -10,9 +10,6 @@ import { eq } from "drizzle-orm";
 
 vi.mock("ai", () => ({
   generateText: vi.fn(),
-  Output: {
-    object: vi.fn((params: unknown) => params),
-  },
 }));
 
 import { generateText } from "ai";
@@ -112,20 +109,20 @@ describe("assessor", () => {
 
     // Mock successful LLM response
     vi.mocked(generateText).mockResolvedValueOnce({
-      experimental_output: {
+      text: JSON.stringify({
         relevant: true,
         summary: "Article is about AI",
         tags: ["AI", "ML"],
-      },
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     vi.mocked(generateText).mockResolvedValueOnce({
-      experimental_output: {
+      text: JSON.stringify({
         relevant: false,
         summary: "",
         tags: [],
-      },
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -198,11 +195,11 @@ describe("assessor", () => {
 
     // Mock successful response for topic 2
     vi.mocked(generateText).mockResolvedValueOnce({
-      experimental_output: {
+      text: JSON.stringify({
         relevant: false,
         summary: "",
         tags: [],
-      },
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -340,11 +337,11 @@ describe("assessor", () => {
 
     // Mock successful LLM response
     vi.mocked(generateText).mockResolvedValueOnce({
-      experimental_output: {
+      text: JSON.stringify({
         relevant: true,
         summary: "Relevant article",
         tags: ["tag1"],
-      },
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -386,11 +383,11 @@ describe("assessor", () => {
 
     // Mock successful response
     vi.mocked(generateText).mockResolvedValueOnce({
-      experimental_output: {
+      text: JSON.stringify({
         relevant: true,
         summary: "Test",
         tags: [],
-      },
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -432,11 +429,11 @@ describe("assessor", () => {
 
     // Mock successful response
     vi.mocked(generateText).mockResolvedValueOnce({
-      experimental_output: {
+      text: JSON.stringify({
         relevant: true,
         summary: "Test",
         tags: [],
-      },
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -479,11 +476,11 @@ describe("assessor", () => {
 
     // Mock response
     vi.mocked(generateText).mockResolvedValueOnce({
-      experimental_output: {
+      text: JSON.stringify({
         relevant: true,
         summary: "Test",
         tags: [],
-      },
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
