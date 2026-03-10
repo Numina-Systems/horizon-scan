@@ -86,7 +86,7 @@ async function main(): Promise<void> {
 
   registerShutdownHandlers({ schedulers, closeDb, logger });
 
-  const app = createApiServer({ db, config, logger });
+  const app = createApiServer({ db, config, logger, model });
   app.listen(PORT, () => {
     logger.info({ port: PORT }, "api server listening");
   });

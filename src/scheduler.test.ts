@@ -8,6 +8,8 @@ import type { ParsedRssItem } from "./pipeline/types";
 vi.mock("node-cron");
 vi.mock("./pipeline/poller");
 vi.mock("./pipeline/dedup");
+vi.mock("./pipeline/fetcher");
+vi.mock("./pipeline/extract-articles");
 
 describe("createPollScheduler", () => {
   let db: AppDatabase;

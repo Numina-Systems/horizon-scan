@@ -32,6 +32,83 @@ export type PipelineDeps = {
  * @param pipeline - Optional pipeline dependencies (LLM model for assessment)
  * @returns A PollScheduler with a stop() method to halt the scheduled polling
  */
+/**
+ * Runs a single poll cycle: poll → dedup → fetch → extract → assess.
+ * Extracted so it can be called by both the cron scheduler and the manual trigger endpoint.
+ */
+export async function runPollCycle(
+  db: AppDatabase,
+  config: AppConfig,
+  logger: Logger,
+  pipeline?: PipelineDeps,
+): Promise<void> {
+  logger.info("poll cycle starting");
+
+  const enabledFeeds = db
+    .select()
+    .from(feeds)
+    .where(eq(feeds.enabled, true))
+    .all();
+
+  for (const feed of enabledFeeds) {
+    try {
+      const pollResult = await pollFeed(feed.name, feed.url, logger);
+
+      if (pollResult.error) {
+        logger.warn(
+          { feedName: feed.name, error: pollResult.error },
+          "feed poll returned error, skipping dedup",
+        );
+        continue;
+      }
+
+      deduplicateAndStore(
+        db,
+        feed.id,
+        feed.name,
+        pollResult.items,
+        logger,
+      );
+
+      db.update(feeds)
+        .set({ lastPolledAt: new Date() })
+        .where(eq(feeds.id, feed.id))
+        .run();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(
+        { feedName: feed.name, feedUrl: feed.url, error: message },
+        "unexpected error during feed processing",
+      );
+    }
+  }
+
+  try {
+    await fetchPendingArticles(db, config, logger);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ error: message }, "fetch stage failed");
+  }
+
+  try {
+    extractPendingArticles(db, logger);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ error: message }, "extract stage failed");
+  }
+
+  if (pipeline?.model) {
+    try {
+      await assessPendingArticles(db, pipeline.model, config, logger);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ error: message }, "assessment stage failed");
+    }
+  }
+
+  logger.info("poll cycle complete");
+}
+
 export function createPollScheduler(
   db: AppDatabase,
   config: AppConfig,
@@ -41,74 +118,7 @@ export function createPollScheduler(
   const task: ScheduledTask = cron.schedule(
     config.schedule.poll,
     async () => {
-      logger.info("poll cycle starting");
-
-      const enabledFeeds = db
-        .select()
-        .from(feeds)
-        .where(eq(feeds.enabled, true))
-        .all();
-
-      for (const feed of enabledFeeds) {
-        try {
-          const pollResult = await pollFeed(feed.name, feed.url, logger);
-
-          if (pollResult.error) {
-            logger.warn(
-              { feedName: feed.name, error: pollResult.error },
-              "feed poll returned error, skipping dedup",
-            );
-            continue;
-          }
-
-          deduplicateAndStore(
-            db,
-            feed.id,
-            feed.name,
-            pollResult.items,
-            logger,
-          );
-
-          db.update(feeds)
-            .set({ lastPolledAt: new Date() })
-            .where(eq(feeds.id, feed.id))
-            .run();
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          logger.error(
-            { feedName: feed.name, feedUrl: feed.url, error: message },
-            "unexpected error during feed processing",
-          );
-        }
-      }
-
-      // Stage 3: Fetch article content
-      try {
-        await fetchPendingArticles(db, config, logger);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.error({ error: message }, "fetch stage failed");
-      }
-
-      // Stage 4: Extract article content
-      try {
-        extractPendingArticles(db, logger);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.error({ error: message }, "extract stage failed");
-      }
-
-      // Stage 5: Assess articles against topics
-      if (pipeline?.model) {
-        try {
-          await assessPendingArticles(db, pipeline.model, config, logger);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          logger.error({ error: message }, "assessment stage failed");
-        }
-      }
-
-      logger.info("poll cycle complete");
+      await runPollCycle(db, config, logger, pipeline);
     },
   );
 

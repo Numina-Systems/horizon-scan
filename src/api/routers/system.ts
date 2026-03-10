@@ -2,6 +2,7 @@
 import { router, publicProcedure } from "../trpc";
 import { feeds, topics } from "../../db/schema";
 import { sql, desc } from "drizzle-orm";
+import { runPollCycle } from "../../scheduler";
 
 /**
  * tRPC router for system health and status.
@@ -35,5 +36,12 @@ export const systemRouter = router({
       feedCount,
       topicCount,
     };
+  }),
+
+  triggerPoll: publicProcedure.mutation(async ({ ctx }) => {
+    await runPollCycle(ctx.db, ctx.config, ctx.logger, {
+      model: ctx.model,
+    });
+    return { triggered: true };
   }),
 });

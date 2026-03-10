@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   createTestDatabase,
   seedTestFeed,
@@ -7,6 +7,10 @@ import {
   createTestCaller,
 } from "../../test-utils/db";
 import type { AppDatabase } from "../../db";
+
+vi.mock("../../scheduler", () => ({
+  runPollCycle: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe("system router", () => {
   let db: AppDatabase;
@@ -84,5 +88,14 @@ describe("system router", () => {
     const result = await customCaller.system.status();
     expect(result.provider).toBe("openai");
     expect(result.model).toBe("gpt-4");
+  });
+
+  it("should trigger a poll cycle and return triggered:true", async () => {
+    const { runPollCycle } = await import("../../scheduler");
+
+    const result = await caller.system.triggerPoll();
+
+    expect(result).toEqual({ triggered: true });
+    expect(vi.mocked(runPollCycle)).toHaveBeenCalledOnce();
   });
 });

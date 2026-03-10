@@ -190,7 +190,7 @@ export function createTestCaller(
   const config = { ...createTestConfig(), ...configOverrides };
   const logger = pino({ level: "silent" });
 
-  return createCaller({ db, config, logger });
+  return createCaller({ db, config, logger, model: null });
 }
 
 /**
