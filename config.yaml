@@ -6,12 +6,12 @@ feeds:
   - name: PRNewswire - BizTech
     url: https://www.prnewswire.com/rss/business-technology-latest-news/business-technology-latest-news-list.rss
     extractorConfig:
-      bodySelector: "p.prnews_p"
+      bodySelector: ".release-body p"
       jsonLd: true
   - name: PRNewswire - Health
     url: https://www.prnewswire.com/rss/health-latest-news/health-latest-news-list.rss
     extractorConfig:
-      bodySelector: "p.prnews_p"
+      bodySelector: ".release-body p"
       jsonLd: true
 
 topics:
