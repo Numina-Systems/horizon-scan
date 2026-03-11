@@ -3,10 +3,10 @@
 Last verified: 2026-02-12
 
 ## Purpose
-Loads and validates application configuration from a YAML file at startup. Single source of truth for all runtime settings (feeds, topics, LLM provider, schedules, extraction tuning).
+Loads and validates application configuration from a YAML file at startup. Single source of truth for all runtime settings (feeds, topics, LLM provider, schedules, extraction tuning, deduplication).
 
 ## Contracts
-- **Exposes**: `loadConfig(path) -> AppConfig`, `AppConfig` type
+- **Exposes**: `loadConfig(path) -> AppConfig`, `AppConfig` type with `dedup` section (`similarityThreshold: 0-1`, `defaultLookbackDays: positive integer`), and per-feed `dedupLookbackDays` override
 - **Guarantees**: Returned config is fully validated via Zod; invalid config throws with descriptive error messages listing each failed field
 - **Expects**: Valid file path to a YAML file; crashes the process if config is invalid (by design)
 
