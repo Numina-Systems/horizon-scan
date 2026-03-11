@@ -34,7 +34,7 @@ export function deduplicateAndStore(
         url: item.url,
         publishedAt: item.publishedAt,
         metadata: item.metadata,
-        status: "pending_assessment",
+        status: "pending_dedup",
       })
       .run();
 
