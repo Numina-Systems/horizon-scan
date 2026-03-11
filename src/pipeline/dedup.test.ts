@@ -9,7 +9,7 @@ import type { ParsedRssItem } from "./types";
 const logger = pino({ level: "silent" });
 
 describe("deduplicateAndStore", () => {
-  it("should insert new articles with correct fields and pending_assessment status", () => {
+  it("should insert new articles with correct fields and pending_dedup status", () => {
     const db = createTestDatabase();
     const feedId = seedTestFeed(db);
 
@@ -49,7 +49,7 @@ describe("deduplicateAndStore", () => {
       prnIndustry: "Technology",
       prnSubject: "AI",
     });
-    expect(article1!.status).toBe("pending_assessment");
+    expect(article1!.status).toBe("pending_dedup");
     expect(article1!.feedId).toBe(feedId);
 
     const article2 = inserted[1];
@@ -57,7 +57,7 @@ describe("deduplicateAndStore", () => {
     expect(article2!.guid).toBe("article-2");
     expect(article2!.title).toBe("Test Article 2");
     expect(article2!.metadata).toEqual({});
-    expect(article2!.status).toBe("pending_assessment");
+    expect(article2!.status).toBe("pending_dedup");
   });
 
   it("should insert all new items when no duplicates exist", () => {
@@ -289,7 +289,7 @@ describe("deduplicateAndStore", () => {
     expect(stored).toBeDefined();
     expect(stored?.title).toBeNull();
     expect(stored?.publishedAt).toBeNull();
-    expect(stored?.status).toBe("pending_assessment");
+    expect(stored?.status).toBe("pending_dedup");
   });
 
   it("should associate articles with correct feed ID", () => {
