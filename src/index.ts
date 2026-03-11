@@ -7,6 +7,7 @@ import { createLogger } from "./logger";
 import { loadConfig } from "./config";
 import { createDatabase } from "./db";
 import { createLlmClient } from "./llm/client";
+import { createEmbeddingModel } from "./embedding";
 import { seedDatabase } from "./seed";
 import { createPollScheduler, createDigestScheduler } from "./scheduler";
 import { createMailgunSender } from "./digest/sender";
@@ -60,7 +61,22 @@ async function main(): Promise<void> {
     );
   }
 
-  const pollScheduler = createPollScheduler(db, config, logger, { model });
+  let embeddingModel = null;
+  try {
+    embeddingModel = createEmbeddingModel();
+    logger.info("embedding model initialised");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn(
+      { error: message },
+      "embedding model init failed, embedding dedup disabled",
+    );
+  }
+
+  const pollScheduler = createPollScheduler(db, config, logger, {
+    model,
+    embeddingModel,
+  });
   logger.info({ schedule: config.schedule.poll }, "poll scheduler started");
 
   const apiKey = process.env["MAILGUN_API_KEY"];
@@ -86,7 +102,7 @@ async function main(): Promise<void> {
 
   registerShutdownHandlers({ schedulers, closeDb, logger });
 
-  const app = createApiServer({ db, config, logger, model });
+  const app = createApiServer({ db, config, logger, model, embeddingModel });
   app.listen(PORT, () => {
     logger.info({ port: PORT }, "api server listening");
   });
