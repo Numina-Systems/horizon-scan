@@ -287,4 +287,119 @@ describe("createPollScheduler", () => {
       expect(mockTaskStop).toHaveBeenCalled();
     }
   });
+
+  it("should call fallbackPendingDedup when embeddingModel is null (AC4.1)", async () => {
+    const { createPollScheduler, runPollCycle } = await import("./scheduler");
+    const { pollFeed } = await import("./pipeline/poller");
+    const { deduplicateAndStore } = await import("./pipeline/dedup");
+    const { fallbackPendingDedup, processPendingDedup } = await import(
+      "./pipeline/embedding-dedup"
+    );
+
+    const config: AppConfig = {
+      schedule: { poll: "0 * * * *", digest: "0 9 * * *" },
+      feeds: [],
+      topics: [],
+      llm: { provider: "anthropic", model: "claude-opus-4-6" },
+      digest: { recipient: "test@example.com" },
+      extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
+      assessment: { maxArticleLength: 4000 },
+      dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
+    };
+
+    const logger = pino({ level: "silent" });
+
+    seedTestFeed(db, {
+      name: "Test Feed",
+      url: "https://example.com/feed",
+      enabled: true,
+    });
+
+    vi.mocked(pollFeed).mockResolvedValue({
+      feedName: "Test Feed",
+      items: [],
+      error: null,
+    });
+
+    vi.mocked(deduplicateAndStore).mockReturnValue({
+      feedName: "Test Feed",
+      newCount: 0,
+      skippedCount: 0,
+    });
+
+    createPollScheduler(db, config, logger, { model: null, embeddingModel: null });
+
+    if (capturedCallback) {
+      await capturedCallback();
+
+      expect(vi.mocked(fallbackPendingDedup)).toHaveBeenCalled();
+      expect(vi.mocked(processPendingDedup)).not.toHaveBeenCalled();
+    }
+  });
+
+  it("should call processPendingDedup when embeddingModel is not null (AC4.1)", async () => {
+    const { createPollScheduler } = await import("./scheduler");
+    const { pollFeed } = await import("./pipeline/poller");
+    const { deduplicateAndStore } = await import("./pipeline/dedup");
+    const { fallbackPendingDedup, processPendingDedup } = await import(
+      "./pipeline/embedding-dedup"
+    );
+
+    const config: AppConfig = {
+      schedule: { poll: "0 * * * *", digest: "0 9 * * *" },
+      feeds: [],
+      topics: [],
+      llm: { provider: "anthropic", model: "claude-opus-4-6" },
+      digest: { recipient: "test@example.com" },
+      extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
+      assessment: { maxArticleLength: 4000 },
+      dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
+    };
+
+    const logger = pino({ level: "silent" });
+
+    seedTestFeed(db, {
+      name: "Test Feed",
+      url: "https://example.com/feed",
+      enabled: true,
+    });
+
+    vi.mocked(pollFeed).mockResolvedValue({
+      feedName: "Test Feed",
+      items: [],
+      error: null,
+    });
+
+    vi.mocked(deduplicateAndStore).mockReturnValue({
+      feedName: "Test Feed",
+      newCount: 0,
+      skippedCount: 0,
+    });
+
+    vi.mocked(processPendingDedup).mockResolvedValue({
+      processedCount: 0,
+      duplicateCount: 0,
+      passedCount: 0,
+      failedCount: 0,
+    });
+
+    const mockEmbeddingModel = {} as any;
+
+    createPollScheduler(db, config, logger, {
+      model: null,
+      embeddingModel: mockEmbeddingModel,
+    });
+
+    if (capturedCallback) {
+      await capturedCallback();
+
+      expect(vi.mocked(processPendingDedup)).toHaveBeenCalledWith(
+        db,
+        mockEmbeddingModel,
+        config,
+        logger,
+      );
+      expect(vi.mocked(fallbackPendingDedup)).not.toHaveBeenCalled();
+    }
+  });
 });
