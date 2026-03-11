@@ -19,3 +19,10 @@ export type DedupResult = {
   readonly newCount: number;
   readonly skippedCount: number;
 };
+
+export type EmbeddingDedupResult = {
+  readonly processedCount: number;
+  readonly duplicateCount: number;
+  readonly passedCount: number;
+  readonly failedCount: number;
+};
