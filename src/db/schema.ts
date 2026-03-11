@@ -20,6 +20,7 @@ export const feeds = sqliteTable("feeds", {
     .notNull(),
   pollIntervalMinutes: integer("poll_interval_minutes").notNull().default(15),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  dedupLookbackDays: integer("dedup_lookback_days"),
   lastPolledAt: integer("last_polled_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

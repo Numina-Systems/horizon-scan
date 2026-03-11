@@ -38,6 +38,7 @@ export function seedDatabase(
           extractorConfig: feed.extractorConfig,
           pollIntervalMinutes: feed.pollIntervalMinutes,
           enabled: feed.enabled,
+          dedupLookbackDays: feed.dedupLookbackDays,
         })
         .run();
     }

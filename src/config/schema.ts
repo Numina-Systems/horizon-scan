@@ -12,6 +12,7 @@ const feedConfigSchema = z.object({
   extractorConfig: extractorConfigSchema,
   pollIntervalMinutes: z.number().int().positive().default(15),
   enabled: z.boolean().default(true),
+  dedupLookbackDays: z.number().int().positive().optional(),
 });
 
 const topicConfigSchema = z.object({
@@ -51,6 +52,12 @@ export const appConfigSchema = z.object({
       maxArticleLength: z.number().int().positive().default(4000),
     })
     .default({}),
+  dedup: z
+    .object({
+      similarityThreshold: z.number().min(0).max(1).default(0.9),
+      defaultLookbackDays: z.number().int().positive().default(15),
+    })
+    .default({ similarityThreshold: 0.9, defaultLookbackDays: 15 }),
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;

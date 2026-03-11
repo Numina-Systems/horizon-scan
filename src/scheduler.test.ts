@@ -46,6 +46,7 @@ describe("createPollScheduler", () => {
       digest: { recipient: "test@example.com" },
       extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
       assessment: { maxArticleLength: 4000 },
+      dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
     };
 
     const logger = pino({ level: "silent" });
@@ -72,6 +73,7 @@ describe("createPollScheduler", () => {
       digest: { recipient: "test@example.com" },
       extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
       assessment: { maxArticleLength: 4000 },
+      dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
     };
 
     const logger = pino({ level: "silent" });
@@ -138,6 +140,7 @@ describe("createPollScheduler", () => {
       digest: { recipient: "test@example.com" },
       extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
       assessment: { maxArticleLength: 4000 },
+      dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
     };
 
     const logger = pino({ level: "silent" });
@@ -203,6 +206,7 @@ describe("createPollScheduler", () => {
       digest: { recipient: "test@example.com" },
       extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
       assessment: { maxArticleLength: 4000 },
+      dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
     };
 
     const logger = pino({ level: "silent" });
@@ -270,6 +274,7 @@ describe("createPollScheduler", () => {
       digest: { recipient: "test@example.com" },
       extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
       assessment: { maxArticleLength: 4000 },
+      dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
     };
 
     const logger = pino({ level: "silent" });

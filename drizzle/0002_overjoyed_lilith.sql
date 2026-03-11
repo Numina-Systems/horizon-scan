@@ -1,0 +1,1 @@
+ALTER TABLE `feeds` ADD `dedup_lookback_days` integer;
