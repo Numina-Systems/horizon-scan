@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createTestDatabase, seedTestFeed, seedTestArticle, createTestConfig } from "../test-utils/db";
 import type { AppDatabase } from "../db";
 import type { AppConfig } from "../config";
-import { processPendingDedup } from "./embedding-dedup";
+import { processPendingDedup, fallbackPendingDedup } from "./embedding-dedup";
 import { articles } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import pino from "pino";
 import type { EmbeddingModel } from "ai";
 
@@ -418,6 +418,344 @@ describe("processPendingDedup", () => {
       expect(result.failedCount).toBe(1);
       expect(result.processedCount).toBe(1);
       expect(result.passedCount).toBe(1);
+    });
+  });
+
+  describe("AC1.3: Retry on embedding generation failure", () => {
+    it("increments embeddingRetryCount when generateEmbedding throws", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+      const mockGenerate = vi.mocked(generateEmbedding);
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockRejectedValue(new Error("connection failed"));
+
+      const feedId = seedTestFeed(db);
+      const articleId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Test",
+        extractedText: "Content",
+      });
+
+      const model = {} as EmbeddingModel;
+      const result = await processPendingDedup(db, model, config, logger);
+
+      const article = db.select().from(articles).where(eq(articles.id, articleId)).get();
+
+      expect(article?.embeddingRetryCount).toBe(1);
+      expect(article?.status).toBe("pending_dedup");
+      expect(result.failedCount).toBe(1);
+    });
+
+    it("keeps article in pending_dedup for retry on next cycle", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+      const mockGenerate = vi.mocked(generateEmbedding);
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockRejectedValue(new Error("Ollama unavailable"));
+
+      const feedId = seedTestFeed(db);
+      const articleId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Test",
+        extractedText: "Content",
+      });
+
+      const model = {} as EmbeddingModel;
+      await processPendingDedup(db, model, config, logger);
+
+      const article = db.select().from(articles).where(eq(articles.id, articleId)).get();
+
+      expect(article?.status).toBe("pending_dedup");
+      expect(article?.embedding).toBeNull();
+    });
+  });
+
+  describe("AC1.4: Retry on embedding dimension mismatch", () => {
+    it("treats wrong embedding dimension as failure and increments retry count", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+      const mockGenerate = vi.mocked(generateEmbedding);
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockResolvedValue(new Array(512).fill(0.5)); // Wrong dimension
+
+      const feedId = seedTestFeed(db);
+      const articleId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Test",
+        extractedText: "Content",
+      });
+
+      const model = {} as EmbeddingModel;
+      const result = await processPendingDedup(db, model, config, logger);
+
+      const article = db.select().from(articles).where(eq(articles.id, articleId)).get();
+
+      expect(article?.embeddingRetryCount).toBe(1);
+      expect(article?.status).toBe("pending_dedup");
+      expect(article?.embedding).toBeNull();
+      expect(result.failedCount).toBe(1);
+    });
+
+    it("logs warning with dimension mismatch details", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+      const mockGenerate = vi.mocked(generateEmbedding);
+
+      const warnSpy = vi.spyOn(logger, "warn");
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockResolvedValue(new Array(256).fill(0.1)); // Wrong dimension
+
+      const feedId = seedTestFeed(db);
+      seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Test",
+        extractedText: "Content",
+      });
+
+      const model = {} as EmbeddingModel;
+      await processPendingDedup(db, model, config, logger);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actual: 256,
+          expected: 768,
+        }),
+        expect.stringContaining("embedding dimension mismatch"),
+      );
+    });
+  });
+
+  describe("AC4.1: Fallback when embedding model unavailable", () => {
+    it("transitions all pending_dedup articles to pending_assessment", () => {
+      const feedId = seedTestFeed(db);
+
+      const articleId1 = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Article 1",
+        extractedText: "Content 1",
+      });
+
+      const articleId2 = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Article 2",
+        extractedText: "Content 2",
+      });
+
+      fallbackPendingDedup(db, logger);
+
+      const article1 = db.select().from(articles).where(eq(articles.id, articleId1)).get();
+      const article2 = db.select().from(articles).where(eq(articles.id, articleId2)).get();
+
+      expect(article1?.status).toBe("pending_assessment");
+      expect(article2?.status).toBe("pending_assessment");
+    });
+
+    it("does not affect articles with other statuses", () => {
+      const feedId = seedTestFeed(db);
+
+      seedTestArticle(db, feedId, {
+        status: "pending_assessment",
+        title: "Already assessed",
+      });
+
+      const dupId = seedTestArticle(db, feedId, {
+        status: "duplicate",
+        title: "Duplicate",
+      });
+
+      const pendingId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Pending",
+      });
+
+      fallbackPendingDedup(db, logger);
+
+      const dup = db.select().from(articles).where(eq(articles.id, dupId)).get();
+      const pending = db.select().from(articles).where(eq(articles.id, pendingId)).get();
+
+      expect(dup?.status).toBe("duplicate");
+      expect(pending?.status).toBe("pending_assessment");
+    });
+
+    it("logs info message when transitioning articles", () => {
+      const infoSpy = vi.spyOn(logger, "info");
+
+      const feedId = seedTestFeed(db);
+      seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Article 1",
+      });
+      seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Article 2",
+      });
+
+      fallbackPendingDedup(db, logger);
+
+      expect(infoSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ count: 2 }),
+        expect.stringContaining("fallback"),
+      );
+    });
+  });
+
+  describe("AC4.2: Max retries fallback", () => {
+    it("transitions article with embeddingRetryCount >= 3 to pending_assessment", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+      const mockGenerate = vi.mocked(generateEmbedding);
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+
+      const feedId = seedTestFeed(db);
+
+      const articleId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Exhausted Retries",
+        extractedText: "Content",
+      });
+
+      // Manually set retry count to 3 to simulate exhausted retries
+      db.update(articles).set({ embeddingRetryCount: 3 }).where(eq(articles.id, articleId)).run();
+
+      const model = {} as EmbeddingModel;
+      const result = await processPendingDedup(db, model, config, logger);
+
+      const article = db.select().from(articles).where(eq(articles.id, articleId)).get();
+
+      expect(article?.status).toBe("pending_assessment");
+      expect(article?.embeddingRetryCount).toBe(3);
+      // This article was transitioned by fallback, not processed in main loop
+      expect(result.processedCount).toBe(1);
+      expect(result.passedCount).toBe(1);
+    });
+
+    it("does not pass exhausted articles to generateEmbedding", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+      const mockGenerate = vi.mocked(generateEmbedding);
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+
+      const feedId = seedTestFeed(db);
+
+      seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Fresh Article",
+        extractedText: "Content",
+        embeddingRetryCount: 0,
+      });
+
+      seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Exhausted Article",
+        extractedText: "Content",
+        embeddingRetryCount: 3,
+      });
+
+      const model = {} as EmbeddingModel;
+      await processPendingDedup(db, model, config, logger);
+
+      // Only the fresh article should be passed to generateEmbedding
+      expect(mockGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it("no data loss: articles with max retries are stored without embedding", async () => {
+      const feedId = seedTestFeed(db);
+
+      const articleId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Will be transitioned",
+        extractedText: "Important content",
+        embeddingRetryCount: 3,
+      });
+
+      fallbackPendingDedup(db, logger);
+
+      const article = db.select().from(articles).where(eq(articles.id, articleId)).get();
+
+      // Article should exist with content intact
+      expect(article).toBeDefined();
+      expect(article?.title).toBe("Will be transitioned");
+      expect(article?.extractedText).toBe("Important content");
+      expect(article?.status).toBe("pending_assessment");
+    });
+  });
+
+  describe("Retry count filtering", () => {
+    it("skips articles with retry count at MAX_EMBEDDING_RETRIES (3)", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockGenerate = vi.mocked(generateEmbedding);
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+
+      const feedId = seedTestFeed(db);
+
+      // Article at retry limit should not be processed
+      const articleId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "At limit",
+        extractedText: "Content",
+      });
+
+      // Manually set retry count to 3
+      db.update(articles).set({ embeddingRetryCount: 3 }).where(eq(articles.id, articleId)).run();
+
+      const model = {} as EmbeddingModel;
+      const result = await processPendingDedup(db, model, config, logger);
+
+      // generateEmbedding should not be called (article filtered out by query)
+      expect(mockGenerate).not.toHaveBeenCalled();
+      // But the article should still be transitioned by fallback
+      expect(result.processedCount).toBe(1);
+    });
+
+    it("processes articles with retry count less than MAX_EMBEDDING_RETRIES", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockGenerate = vi.mocked(generateEmbedding);
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+
+      const feedId = seedTestFeed(db);
+
+      const id0 = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Retry 0",
+        extractedText: "Content",
+      });
+
+      const id1 = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Retry 1",
+        extractedText: "Content",
+      });
+
+      const id2 = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Retry 2",
+        extractedText: "Content",
+      });
+
+      // Manually set retry counts
+      db.update(articles).set({ embeddingRetryCount: 1 }).where(eq(articles.id, id1)).run();
+      db.update(articles).set({ embeddingRetryCount: 2 }).where(eq(articles.id, id2)).run();
+
+      const model = {} as EmbeddingModel;
+      const result = await processPendingDedup(db, model, config, logger);
+
+      // All three should be processed
+      expect(mockGenerate).toHaveBeenCalledTimes(3);
+      expect(result.processedCount).toBe(3);
     });
   });
 });

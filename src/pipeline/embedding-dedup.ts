@@ -29,6 +29,11 @@ export async function processPendingDedup(
   config: AppConfig,
   logger: Logger,
 ): Promise<EmbeddingDedupResult> {
+  let processedCount = 0;
+  let duplicateCount = 0;
+  let passedCount = 0;
+  let failedCount = 0;
+
   const pending = db
     .select({
       id: articles.id,
@@ -47,20 +52,8 @@ export async function processPendingDedup(
 
   if (pending.length === 0) {
     logger.info("no articles pending embedding dedup");
-    return {
-      processedCount: 0,
-      duplicateCount: 0,
-      passedCount: 0,
-      failedCount: 0,
-    };
-  }
-
-  let processedCount = 0;
-  let duplicateCount = 0;
-  let passedCount = 0;
-  let failedCount = 0;
-
-  for (const article of pending) {
+  } else {
+    for (const article of pending) {
     try {
       // Prepare text for embedding
       const text = prepareEmbeddingInput({
@@ -162,6 +155,7 @@ export async function processPendingDedup(
       failedCount++;
       // Leave article in pending_dedup for retry on next cycle
     }
+  }
   }
 
   // Fallback: transition articles that have exceeded max retries to pending_assessment
