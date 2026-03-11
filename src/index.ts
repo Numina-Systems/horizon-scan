@@ -39,9 +39,11 @@ async function main(): Promise<void> {
     "config loaded",
   );
 
-  const { db, close: closeDb } = createDatabase(resolve(DATABASE_URL));
+  const { db, sqlite, close: closeDb } = createDatabase(resolve(DATABASE_URL));
 
+  sqlite.pragma("foreign_keys = OFF");
   migrate(db, { migrationsFolder: resolve("./drizzle") });
+  sqlite.pragma("foreign_keys = ON");
   logger.info("database migrations applied");
 
   seedDatabase(db, config, logger);

@@ -14,8 +14,10 @@ import type { Logger } from "pino";
  * @returns A new AppDatabase instance with schema initialized.
  */
 export function createTestDatabase(): AppDatabase {
-  const { db } = createDatabase(":memory:");
+  const { db, sqlite } = createDatabase(":memory:");
+  sqlite.pragma("foreign_keys = OFF");
   migrate(db, { migrationsFolder: "./drizzle" });
+  sqlite.pragma("foreign_keys = ON");
   return db;
 }
 

@@ -8,7 +8,7 @@ import * as schema from "./schema";
 
 export function createDatabase(
   dbPath: string,
-): { readonly db: AppDatabase; readonly close: () => void } {
+): { readonly db: AppDatabase; readonly sqlite: Database.Database; readonly close: () => void } {
   mkdirSync(dirname(dbPath), { recursive: true });
 
   const sqlite = new Database(dbPath);
@@ -17,7 +17,7 @@ export function createDatabase(
 
   const db = drizzle(sqlite, { schema });
 
-  return { db, close: () => sqlite.close() };
+  return { db, sqlite, close: () => sqlite.close() };
 }
 
 export type DatabaseResult = ReturnType<typeof createDatabase>;
