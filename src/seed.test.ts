@@ -69,6 +69,10 @@ function createSeedTestConfig(
     assessment: {
       maxArticleLength: 4000,
     },
+    dedup: {
+      similarityThreshold: 0.9,
+      defaultLookbackDays: 15,
+    },
   };
 }
 

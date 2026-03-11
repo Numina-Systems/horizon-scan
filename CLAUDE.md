@@ -1,6 +1,6 @@
 # Horizon Scan
 
-Last verified: 2026-02-12
+Last verified: 2026-03-11
 
 ## Tech Stack
 - Language: TypeScript 5.x (ES2022 target, CommonJS modules)
@@ -23,9 +23,10 @@ Last verified: 2026-02-12
 - `npm run db:push` - Push schema to database
 
 ## Project Structure
-- `src/config/` - YAML config loading + Zod validation
+- `src/config/` - YAML config loading + Zod validation (includes `dedup` section)
 - `src/db/` - Database connection + Drizzle schema (5 tables)
-- `src/pipeline/` - RSS polling, dedup, fetch, extract, LLM assessment
+- `src/embedding/` - Text embedding generation via Ollama (Vercel AI SDK wrapper)
+- `src/pipeline/` - RSS polling, dedup, embedding dedup, fetch, extract, LLM assessment
 - `src/llm/` - Multi-provider LLM client (Vercel AI SDK)
 - `src/digest/` - Email digest: build, render HTML, send via Mailgun
 - `src/api/` - tRPC v11 API layer (Express adapter)
@@ -53,10 +54,11 @@ Last verified: 2026-02-12
 2. Create SQLite DB, run Drizzle migrations
 3. Seed feeds/topics from config (idempotent -- skips if data exists)
 4. Init LLM client (warns + continues if fails)
-5. Start poll scheduler (cron: poll -> dedup -> fetch -> extract -> assess)
-6. Start digest scheduler (cron: build -> render -> send) if Mailgun configured
-7. Register SIGTERM/SIGINT shutdown handlers
-8. Start Express + tRPC API server
+5. Init embedding model via Ollama (warns + continues if fails; dedup falls back to GUID-only)
+6. Start poll scheduler (cron: poll -> dedup -> embedding dedup -> fetch -> extract -> assess)
+7. Start digest scheduler (cron: build -> render -> send) if Mailgun configured
+8. Register SIGTERM/SIGINT shutdown handlers
+9. Start Express + tRPC API server
 
 ## Boundaries
 - Safe to edit: `src/`, `config.yaml`, `docker-compose.yml`

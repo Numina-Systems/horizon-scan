@@ -8,6 +8,27 @@
       "when": 1770914473421,
       "tag": "0000_last_sebastian_shaw",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1773253256918,
+      "tag": "0001_spooky_ken_ellis",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1773254077342,
+      "tag": "0002_overjoyed_lilith",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1773255717390,
+      "tag": "0003_good_prodigy",
+      "breakpoints": true
     }
   ]
 }

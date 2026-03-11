@@ -20,6 +20,7 @@ export const feeds = sqliteTable("feeds", {
     .notNull(),
   pollIntervalMinutes: integer("poll_interval_minutes").notNull().default(15),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  dedupLookbackDays: integer("dedup_lookback_days"),
   lastPolledAt: integer("last_polled_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -40,13 +41,15 @@ export const articles = sqliteTable(
     rawHtml: text("raw_html"),
     extractedText: text("extracted_text"),
     metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
+    embedding: text("embedding", { mode: "json" }).$type<ReadonlyArray<number>>(),
     status: text("status", {
-      enum: ["pending_assessment", "assessed", "failed"],
+      enum: ["pending_dedup", "pending_assessment", "assessed", "duplicate", "failed"],
     })
       .notNull()
-      .default("pending_assessment"),
+      .default("pending_dedup"),
     fetchRetryCount: integer("fetch_retry_count").notNull().default(0),
     assessmentRetryCount: integer("assessment_retry_count").notNull().default(0),
+    embeddingRetryCount: integer("embedding_retry_count").notNull().default(0),
     fetchedAt: integer("fetched_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()

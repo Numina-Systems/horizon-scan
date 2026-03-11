@@ -172,6 +172,10 @@ export function createTestConfig(): AppConfig {
     assessment: {
       maxArticleLength: 4000,
     },
+    dedup: {
+      similarityThreshold: 0.9,
+      defaultLookbackDays: 15,
+    },
   };
 }
 
@@ -190,7 +194,7 @@ export function createTestCaller(
   const config = { ...createTestConfig(), ...configOverrides };
   const logger = pino({ level: "silent" });
 
-  return createCaller({ db, config, logger, model: null });
+  return createCaller({ db, config, logger, model: null, embeddingModel: null });
 }
 
 /**

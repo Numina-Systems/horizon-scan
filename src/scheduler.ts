@@ -2,12 +2,13 @@ import cron from "node-cron";
 import type { ScheduledTask } from "node-cron";
 import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
-import type { LanguageModel } from "ai";
+import type { LanguageModel, EmbeddingModel } from "ai";
 import type { AppDatabase } from "./db";
 import type { AppConfig } from "./config";
 import { feeds } from "./db/schema";
 import { pollFeed } from "./pipeline/poller";
 import { deduplicateAndStore } from "./pipeline/dedup";
+import { processPendingDedup, fallbackPendingDedup } from "./pipeline/embedding-dedup";
 import { fetchPendingArticles } from "./pipeline/fetcher";
 import { extractPendingArticles } from "./pipeline/extract-articles";
 import { assessPendingArticles } from "./pipeline/assessor";
@@ -18,22 +19,24 @@ export type PollScheduler = {
   readonly stop: () => void;
 };
 
+// EmbeddingModel is a union type in ai v4+ (not generic)
 export type PipelineDeps = {
   readonly model: LanguageModel | null;
+  readonly embeddingModel: EmbeddingModel | null;
 };
 
 /**
  * Creates and starts a scheduler that polls feeds on the configured cron schedule.
- * Runs the full pipeline: poll → dedup → fetch → extract → assess.
+ * Runs the full pipeline: poll → dedup → embedding-dedup → fetch → extract → assess.
  *
  * @param db - The application database connection
  * @param config - Application configuration including schedule.poll cron expression
  * @param logger - Logger instance for recording poll events
- * @param pipeline - Optional pipeline dependencies (LLM model for assessment)
+ * @param pipeline - Optional pipeline dependencies (LLM model for assessment, embedding model for dedup)
  * @returns A PollScheduler with a stop() method to halt the scheduled polling
  */
 /**
- * Runs a single poll cycle: poll → dedup → fetch → extract → assess.
+ * Runs a single poll cycle: poll → dedup → embedding-dedup → fetch → extract → assess.
  * Extracted so it can be called by both the cron scheduler and the manual trigger endpoint.
  */
 export async function runPollCycle(
@@ -80,6 +83,22 @@ export async function runPollCycle(
         { feedName: feed.name, feedUrl: feed.url, error: message },
         "unexpected error during feed processing",
       );
+    }
+  }
+
+  if (pipeline?.embeddingModel) {
+    try {
+      await processPendingDedup(db, pipeline.embeddingModel, config, logger);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ error: message }, "embedding dedup stage failed");
+    }
+  } else {
+    try {
+      fallbackPendingDedup(db, logger);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ error: message }, "embedding dedup fallback failed");
     }
   }
 

@@ -134,6 +134,7 @@ describe("fetchPendingArticles", () => {
     digest: { recipient: "test@example.com" },
     extraction: { maxConcurrency: 2, perDomainDelayMs: 100 },
     assessment: { maxArticleLength: 4000 },
+    dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
   };
 
   beforeEach(() => {
