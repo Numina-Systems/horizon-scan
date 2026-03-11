@@ -49,6 +49,7 @@ export const articles = sqliteTable(
       .default("pending_dedup"),
     fetchRetryCount: integer("fetch_retry_count").notNull().default(0),
     assessmentRetryCount: integer("assessment_retry_count").notNull().default(0),
+    embeddingRetryCount: integer("embedding_retry_count").notNull().default(0),
     fetchedAt: integer("fetched_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()

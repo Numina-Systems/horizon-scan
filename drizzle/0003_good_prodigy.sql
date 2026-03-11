@@ -1,0 +1,1 @@
+ALTER TABLE `articles` ADD `embedding_retry_count` integer DEFAULT 0 NOT NULL;
