@@ -12,7 +12,7 @@ Generates text embeddings via Ollama for semantic deduplication. Wraps the Verce
 
 ## Dependencies
 - **Uses**: `ai` (Vercel AI SDK), `ollama-ai-provider-v2`
-- **Used by**: `src/pipeline/dedup.ts`
+- **Used by**: `src/pipeline/embedding-dedup.ts`
 - **Boundary**: This module generates embeddings; dedup logic lives in pipeline
 
 ## Key Files
