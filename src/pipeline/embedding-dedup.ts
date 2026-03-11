@@ -21,7 +21,7 @@ import type { EmbeddingDedupResult } from "./types";
  */
 export async function processPendingDedup(
   db: AppDatabase,
-  embeddingModel: EmbeddingModel,
+  embeddingModel: EmbeddingModel, // EmbeddingModel is a union type in ai v4+ (not generic)
   config: AppConfig,
   logger: Logger,
 ): Promise<EmbeddingDedupResult> {

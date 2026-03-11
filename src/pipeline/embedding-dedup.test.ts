@@ -374,5 +374,50 @@ describe("processPendingDedup", () => {
       expect(result.passedCount).toBe(3);
       expect(mockGenerate).toHaveBeenCalledTimes(3);
     });
+
+    it("handles embedding generation errors gracefully", async () => {
+      const { generateEmbedding, prepareEmbeddingInput } = await import("../embedding");
+      const mockPrepare = vi.mocked(prepareEmbeddingInput);
+      const mockGenerate = vi.mocked(generateEmbedding);
+
+      mockPrepare.mockReturnValue("test");
+      mockGenerate.mockRejectedValueOnce(new Error("embedding service unavailable"));
+
+      const feedId = seedTestFeed(db);
+
+      // Seed one article that will fail
+      const failedArticleId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Will Fail",
+        extractedText: "Content",
+      });
+
+      // Seed another article that should succeed
+      const successArticleId = seedTestArticle(db, feedId, {
+        status: "pending_dedup",
+        title: "Will Succeed",
+        extractedText: "Content",
+      });
+
+      mockGenerate.mockResolvedValueOnce(new Array(768).fill(0.1));
+
+      const model = {} as EmbeddingModel;
+      const result = await processPendingDedup(db, model, config, logger);
+
+      // Failed article should remain in pending_dedup
+      const failedArticle = db.select().from(articles).where(eq(articles.id, failedArticleId)).get();
+      expect(failedArticle?.status).toBe("pending_dedup");
+      expect(failedArticle?.embedding).toBeNull();
+
+      // Successful article should be transitioned
+      const successArticle = db.select().from(articles).where(eq(articles.id, successArticleId)).get();
+      expect(successArticle?.status).toBe("pending_assessment");
+      expect(successArticle?.embedding).toBeDefined();
+
+      // Result counts should reflect both processed and failed
+      expect(result.failedCount).toBe(1);
+      expect(result.processedCount).toBe(1);
+      expect(result.passedCount).toBe(1);
+    });
   });
 });
