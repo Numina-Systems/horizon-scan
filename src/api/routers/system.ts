@@ -41,6 +41,7 @@ export const systemRouter = router({
   triggerPoll: publicProcedure.mutation(async ({ ctx }) => {
     await runPollCycle(ctx.db, ctx.config, ctx.logger, {
       model: ctx.model,
+      embeddingModel: ctx.embeddingModel,
     });
     return { triggered: true };
   }),
