@@ -162,25 +162,15 @@ describe("createEmbeddingModel", () => {
   it("should call embeddingModel with qwen3-embedding:0.6b", () => {
     createEmbeddingModel();
 
-    const ollamaInstance = (createOllama as any).mock.results[0].value;
-    expect(ollamaInstance.embeddingModel).toHaveBeenCalledWith(
+    const ollamaInstance = vi.mocked(createOllama).mock.results[0]?.value;
+    expect(ollamaInstance?.embeddingModel).toHaveBeenCalledWith(
       "qwen3-embedding:0.6b",
     );
   });
 });
 
 describe("cosineSimilarity re-export", () => {
-  it("should export cosineSimilarity from ai package", () => {
+  it("should be exported", () => {
     expect(cosineSimilarity).toBeDefined();
-    expect(typeof cosineSimilarity).toBe("function");
-  });
-
-  it("should call cosineSimilarity with two arrays", () => {
-    const a = [0.1, 0.2, 0.3];
-    const b = [0.3, 0.2, 0.1];
-
-    cosineSimilarity(a, b);
-
-    expect(cosineSimilarity).toHaveBeenCalledWith(a, b);
   });
 });

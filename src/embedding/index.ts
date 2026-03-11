@@ -1,6 +1,6 @@
-// Functional Core / Imperative Shell pattern:
-// - prepareEmbeddingInput, generateEmbedding: pure functions (domain logic)
-// - createEmbeddingModel: factory for side effect (model creation)
+// pattern: Mixed (Functional Core + Imperative Shell)
+// Functional Core: prepareEmbeddingInput (pure text manipulation)
+// Imperative Shell: generateEmbedding (async/network I/O), createEmbeddingModel (env var reads, factory)
 
 import { embed, cosineSimilarity } from "ai";
 import { createOllama } from "ollama-ai-provider-v2";
