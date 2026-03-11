@@ -83,7 +83,7 @@ describe("generateEmbedding", () => {
   });
 
   it("should call embed with model and text value", async () => {
-    const mockModel = { id: "test-model" };
+    const mockModel = "test-model";
     const text = "test text";
 
     await generateEmbedding(mockModel, text);
@@ -95,7 +95,7 @@ describe("generateEmbedding", () => {
   });
 
   it("should return embedding array from SDK result", async () => {
-    const mockModel = { id: "test-model" };
+    const mockModel = "test-model";
     const result = await generateEmbedding(mockModel, "test");
 
     expect(result).toEqual(mockEmbedding);
@@ -103,7 +103,7 @@ describe("generateEmbedding", () => {
   });
 
   it("should return array of numbers", async () => {
-    const mockModel = { id: "test-model" };
+    const mockModel = "test-model";
     const result = await generateEmbedding(mockModel, "test");
 
     expect(Array.isArray(result)).toBe(true);
