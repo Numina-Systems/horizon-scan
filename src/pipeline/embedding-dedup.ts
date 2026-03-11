@@ -9,7 +9,7 @@ import { generateEmbedding, prepareEmbeddingInput, cosineSimilarity } from "../e
 import type { EmbeddingDedupResult } from "./types";
 
 const MAX_EMBEDDING_RETRIES = 3;
-const EXPECTED_EMBEDDING_DIM = 768;
+const EXPECTED_EMBEDDING_DIM = 1024;
 
 /**
  * Processes pending articles for embedding-based deduplication.

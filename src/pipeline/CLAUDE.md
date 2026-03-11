@@ -29,7 +29,7 @@ Implements the RSS-to-assessment data pipeline. Executes as a staged sequence: p
 - Assessment retry max: 3. Same failure semantics
 - Assessment is idempotent per article-topic pair (checks for existing before calling LLM)
 - Article text truncated to `config.assessment.maxArticleLength` before LLM call
-- Embedding dimension validation: Expected 768 dimensions. Mismatched dimension treated as error, triggers retry
+- Embedding dimension validation: Expected 1024 dimensions. Mismatched dimension treated as error, triggers retry
 
 ## Gotchas
 - `assessor.ts` uses `@ts-expect-error` for `Output.object` due to Vercel AI SDK type depth issue

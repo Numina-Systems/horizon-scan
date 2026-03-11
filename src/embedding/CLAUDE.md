@@ -7,7 +7,7 @@ Generates text embeddings via Ollama for semantic deduplication. Wraps the Verce
 
 ## Contracts
 - **Exposes**: `createEmbeddingModel(baseUrl?) -> EmbeddingModel`, `generateEmbedding(model, text) -> number[]`, `prepareEmbeddingInput(input) -> string`, `cosineSimilarity` (re-export from ai)
-- **Guarantees**: Text input truncated to title + first 1000 chars of body. Embedding dimension determined by model (768 for qwen3-embedding:0.6b).
+- **Guarantees**: Text input truncated to title + first 1000 chars of body. Embedding dimension determined by model (1024 for qwen3-embedding:0.6b).
 - **Expects**: Ollama running with embedding model pulled. Base URL via param or OLLAMA_BASE_URL env var.
 
 ## Dependencies

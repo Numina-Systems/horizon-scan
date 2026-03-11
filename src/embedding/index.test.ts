@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockEmbedding = Array(768).fill(0.1);
+const mockEmbedding = Array(1024).fill(0.1);
 
 vi.mock("ai", () => ({
   embed: vi.fn(async ({ model, value }: { model: unknown; value: string }) => ({
@@ -99,7 +99,7 @@ describe("generateEmbedding", () => {
     const result = await generateEmbedding(mockModel, "test");
 
     expect(result).toEqual(mockEmbedding);
-    expect(result.length).toBe(768);
+    expect(result.length).toBe(1024);
   });
 
   it("should return array of numbers", async () => {

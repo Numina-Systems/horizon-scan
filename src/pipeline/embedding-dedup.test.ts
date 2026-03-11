@@ -46,7 +46,7 @@ describe("processPendingDedup", () => {
       const mockGenerate = vi.mocked(generateEmbedding);
 
       mockPrepare.mockReturnValue("prepared text");
-      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+      mockGenerate.mockResolvedValue(new Array(1024).fill(0.5));
 
       const feedId = seedTestFeed(db);
       seedTestArticle(db, feedId, {
@@ -65,11 +65,11 @@ describe("processPendingDedup", () => {
     });
   });
 
-  describe("AC1.2: 768-dimensional embeddings", () => {
-    it("generates 768-dimensional embeddings", async () => {
+  describe("AC1.2: 1024-dimensional embeddings", () => {
+    it("generates 1024-dimensional embeddings", async () => {
       const { generateEmbedding } = await import("../embedding");
       const mockGenerate = vi.mocked(generateEmbedding);
-      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+      mockGenerate.mockResolvedValue(new Array(1024).fill(0.5));
 
       const feedId = seedTestFeed(db);
       seedTestArticle(db, feedId, {
@@ -90,7 +90,7 @@ describe("processPendingDedup", () => {
       const mockPrepare = vi.mocked(prepareEmbeddingInput);
       const mockGenerate = vi.mocked(generateEmbedding);
 
-      const testEmbedding = new Array(768).fill(0.1);
+      const testEmbedding = new Array(1024).fill(0.1);
       mockPrepare.mockReturnValue("test");
       mockGenerate.mockResolvedValue(testEmbedding);
 
@@ -107,7 +107,7 @@ describe("processPendingDedup", () => {
 
       expect(article?.embedding).toBeDefined();
       expect(Array.isArray(article?.embedding)).toBe(true);
-      expect((article?.embedding as ReadonlyArray<number>).length).toBe(768);
+      expect((article?.embedding as ReadonlyArray<number>).length).toBe(1024);
     });
   });
 
@@ -117,7 +117,7 @@ describe("processPendingDedup", () => {
       const mockPrepare = vi.mocked(prepareEmbeddingInput);
       const mockGenerate = vi.mocked(generateEmbedding);
 
-      const testEmbedding = new Array(768).fill(0.1);
+      const testEmbedding = new Array(1024).fill(0.1);
       mockPrepare.mockReturnValue("test");
       mockGenerate.mockResolvedValue(testEmbedding);
 
@@ -145,8 +145,8 @@ describe("processPendingDedup", () => {
       const mockGenerate = vi.mocked(generateEmbedding);
       const mockSimilarity = vi.mocked(cosineSimilarity);
 
-      const recentEmbedding = new Array(768).fill(0.5);
-      const newEmbedding = new Array(768).fill(0.5);
+      const recentEmbedding = new Array(1024).fill(0.5);
+      const newEmbedding = new Array(1024).fill(0.5);
 
       mockPrepare.mockReturnValue("test");
       mockGenerate.mockResolvedValue(newEmbedding);
@@ -186,8 +186,8 @@ describe("processPendingDedup", () => {
       const mockGenerate = vi.mocked(generateEmbedding);
       const mockSimilarity = vi.mocked(cosineSimilarity);
 
-      const recentEmbedding = new Array(768).fill(0.5);
-      const newEmbedding = new Array(768).fill(0.1);
+      const recentEmbedding = new Array(1024).fill(0.5);
+      const newEmbedding = new Array(1024).fill(0.1);
 
       mockPrepare.mockReturnValue("test");
       mockGenerate.mockResolvedValue(newEmbedding);
@@ -227,8 +227,8 @@ describe("processPendingDedup", () => {
       const mockGenerate = vi.mocked(generateEmbedding);
       const mockSimilarity = vi.mocked(cosineSimilarity);
 
-      const recentEmbedding = new Array(768).fill(0.5);
-      const newEmbedding = new Array(768).fill(0.5);
+      const recentEmbedding = new Array(1024).fill(0.5);
+      const newEmbedding = new Array(1024).fill(0.5);
 
       mockPrepare.mockReturnValue("test");
       mockGenerate.mockResolvedValue(newEmbedding);
@@ -269,8 +269,8 @@ describe("processPendingDedup", () => {
       const mockGenerate = vi.mocked(generateEmbedding);
       const mockSimilarity = vi.mocked(cosineSimilarity);
 
-      const recentEmbedding = new Array(768).fill(0.5);
-      const newEmbedding = new Array(768).fill(0.5);
+      const recentEmbedding = new Array(1024).fill(0.5);
+      const newEmbedding = new Array(1024).fill(0.5);
 
       mockPrepare.mockReturnValue("test");
       mockGenerate.mockResolvedValue(newEmbedding);
@@ -339,7 +339,7 @@ describe("processPendingDedup", () => {
       const mockPrepare = vi.mocked(prepareEmbeddingInput);
       const mockSimilarity = vi.mocked(cosineSimilarity);
 
-      const testEmbedding = new Array(768).fill(0.1);
+      const testEmbedding = new Array(1024).fill(0.1);
       mockPrepare.mockImplementation((input) => {
         const title = input.title ?? "";
         const body = (input.body ?? "").slice(0, 1000);
@@ -399,7 +399,7 @@ describe("processPendingDedup", () => {
         extractedText: "Content",
       });
 
-      mockGenerate.mockResolvedValueOnce(new Array(768).fill(0.1));
+      mockGenerate.mockResolvedValueOnce(new Array(1024).fill(0.1));
 
       const model = {} as EmbeddingModel;
       const result = await processPendingDedup(db, model, config, logger);
@@ -522,7 +522,7 @@ describe("processPendingDedup", () => {
       expect(warnSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           actual: 256,
-          expected: 768,
+          expected: 1024,
         }),
         expect.stringContaining("embedding dimension mismatch"),
       );
@@ -610,7 +610,7 @@ describe("processPendingDedup", () => {
       const mockGenerate = vi.mocked(generateEmbedding);
 
       mockPrepare.mockReturnValue("test");
-      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+      mockGenerate.mockResolvedValue(new Array(1024).fill(0.5));
 
       const feedId = seedTestFeed(db);
 
@@ -641,7 +641,7 @@ describe("processPendingDedup", () => {
       const mockGenerate = vi.mocked(generateEmbedding);
 
       mockPrepare.mockReturnValue("test");
-      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+      mockGenerate.mockResolvedValue(new Array(1024).fill(0.5));
 
       const feedId = seedTestFeed(db);
 
@@ -695,7 +695,7 @@ describe("processPendingDedup", () => {
       const mockPrepare = vi.mocked(prepareEmbeddingInput);
 
       mockPrepare.mockReturnValue("test");
-      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+      mockGenerate.mockResolvedValue(new Array(1024).fill(0.5));
 
       const feedId = seedTestFeed(db);
 
@@ -724,7 +724,7 @@ describe("processPendingDedup", () => {
       const mockPrepare = vi.mocked(prepareEmbeddingInput);
 
       mockPrepare.mockReturnValue("test");
-      mockGenerate.mockResolvedValue(new Array(768).fill(0.5));
+      mockGenerate.mockResolvedValue(new Array(1024).fill(0.5));
 
       const feedId = seedTestFeed(db);
 
