@@ -8,7 +8,7 @@ import type { AppConfig } from "./config";
 import { feeds } from "./db/schema";
 import { pollFeed } from "./pipeline/poller";
 import { deduplicateAndStore } from "./pipeline/dedup";
-import { processPendingDedup } from "./pipeline/embedding-dedup";
+import { processPendingDedup, fallbackPendingDedup } from "./pipeline/embedding-dedup";
 import { fetchPendingArticles } from "./pipeline/fetcher";
 import { extractPendingArticles } from "./pipeline/extract-articles";
 import { assessPendingArticles } from "./pipeline/assessor";
@@ -92,6 +92,13 @@ export async function runPollCycle(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error({ error: message }, "embedding dedup stage failed");
+    }
+  } else {
+    try {
+      fallbackPendingDedup(db, logger);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ error: message }, "embedding dedup fallback failed");
     }
   }
 

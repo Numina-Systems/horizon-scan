@@ -4,7 +4,7 @@ export { fetchArticle, fetchPendingArticles } from "./fetcher";
 export { extractContent } from "./extractor";
 export { extractPendingArticles } from "./extract-articles";
 export { assessPendingArticles } from "./assessor";
-export { processPendingDedup } from "./embedding-dedup";
+export { processPendingDedup, fallbackPendingDedup } from "./embedding-dedup";
 export { assessmentOutputSchema } from "./assessment-schema";
 export type { ParsedRssItem, PollResult, DedupResult, RssItemMetadata, EmbeddingDedupResult } from "./types";
 export type { FetchResult } from "./fetcher";
