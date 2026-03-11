@@ -4,7 +4,7 @@ import type { AppDatabase } from "../db";
 import type { AppConfig } from "../config";
 import { processPendingDedup, fallbackPendingDedup } from "./embedding-dedup";
 import { articles } from "../db/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import pino from "pino";
 import type { EmbeddingModel } from "ai";
 
