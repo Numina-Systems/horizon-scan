@@ -17,7 +17,7 @@ Provides the SQLite database connection and Drizzle ORM schema. All persistent s
 
 ## Invariants
 - Articles deduplicated by `guid` (unique constraint)
-- Article status is one of: `pending_assessment`, `assessed`, `failed`
+- Article status is one of: `pending_dedup`, `pending_assessment`, `assessed`, `duplicate`, `failed`
 - Digest status is one of: `success`, `failed`
 - All timestamps stored as Unix epochs via Drizzle `mode: "timestamp"`
 - Foreign keys: articles -> feeds, assessments -> articles + topics
@@ -25,7 +25,7 @@ Provides the SQLite database connection and Drizzle ORM schema. All persistent s
 ## Key Decisions
 - SQLite over Postgres: Single-binary deployment, no external DB dependency
 - WAL mode: Concurrent reads during writes
-- JSON columns (`extractor_config`, `metadata`, `tags`): Flexible schema within typed boundaries
+- JSON columns (`extractor_config`, `metadata`, `tags`, `embedding`): Flexible schema within typed boundaries
 
 ## Key Files
 - `schema.ts` - All 5 table definitions (feeds, articles, topics, assessments, digests)
