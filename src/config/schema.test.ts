@@ -279,7 +279,7 @@ describe("appConfigSchema", () => {
       const result = appConfigSchema.safeParse(config);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.feeds[0].dedupLookbackDays).toBe(7);
+        expect(result.data.feeds[0]?.dedupLookbackDays).toBe(7);
       }
     });
 
@@ -289,7 +289,7 @@ describe("appConfigSchema", () => {
       const result = appConfigSchema.safeParse(config);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.feeds[0].dedupLookbackDays).toBeUndefined();
+        expect(result.data.feeds[0]?.dedupLookbackDays).toBeUndefined();
       }
     });
 

@@ -57,7 +57,7 @@ export const appConfigSchema = z.object({
       similarityThreshold: z.number().min(0).max(1).default(0.9),
       defaultLookbackDays: z.number().int().positive().default(15),
     })
-    .default({ similarityThreshold: 0.9, defaultLookbackDays: 15 }),
+    .default({}),
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;
