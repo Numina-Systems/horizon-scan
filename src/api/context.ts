@@ -1,6 +1,5 @@
 // pattern: Functional Core
-import type { LanguageModel } from "ai";
-import type { EmbeddingModel } from "ai";
+import type { LanguageModel, EmbeddingModel } from "ai";
 import type { AppDatabase } from "../db";
 import type { AppConfig } from "../config";
 import type { Logger } from "pino";

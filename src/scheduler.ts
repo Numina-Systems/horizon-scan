@@ -2,8 +2,7 @@ import cron from "node-cron";
 import type { ScheduledTask } from "node-cron";
 import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
-import type { LanguageModel } from "ai";
-import type { EmbeddingModel } from "ai";
+import type { LanguageModel, EmbeddingModel } from "ai";
 import type { AppDatabase } from "./db";
 import type { AppConfig } from "./config";
 import { feeds } from "./db/schema";
@@ -37,7 +36,7 @@ export type PipelineDeps = {
  * @returns A PollScheduler with a stop() method to halt the scheduled polling
  */
 /**
- * Runs a single poll cycle: poll → dedup → fetch → extract → assess.
+ * Runs a single poll cycle: poll → dedup → embedding-dedup → fetch → extract → assess.
  * Extracted so it can be called by both the cron scheduler and the manual trigger endpoint.
  */
 export async function runPollCycle(
