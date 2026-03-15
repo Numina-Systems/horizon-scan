@@ -6,6 +6,7 @@ export { extractPendingArticles } from "./extract-articles";
 export { assessPendingArticles } from "./assessor";
 export { processPendingDedup, fallbackPendingDedup } from "./embedding-dedup";
 export { assessmentOutputSchema } from "./assessment-schema";
+export { buildSystemPrompt, buildUserPrompt } from "./assessment-prompt";
 export type { ParsedRssItem, PollResult, DedupResult, RssItemMetadata, EmbeddingDedupResult } from "./types";
 export type { FetchResult } from "./fetcher";
 export type { ExtractionResult } from "./extractor";

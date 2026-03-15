@@ -10,6 +10,7 @@ import {
   assessmentOutputSchema,
   type AssessmentOutput,
 } from "./assessment-schema";
+import { buildSystemPrompt, buildUserPrompt } from "./assessment-prompt";
 
 type AssessmentTopic = {
   readonly name: string;
@@ -23,15 +24,8 @@ async function callLlmForAssessment(
 ): Promise<AssessmentOutput> {
   const response = await generateText({
     model,
-    system: `You assess articles for a market research digest. Respond with ONLY a JSON object containing all three fields: "relevant", "summary", and "tags".
-
-Rules:
-- "relevant" (boolean): Is the article relevant to the topic?
-- "summary" (string): If relevant, write 2-3 sentences about WHAT THE ARTICLE SAYS — specific facts, announcements, numbers, or findings from the article text. If not relevant, use an empty string.
-- "tags" (string array): If relevant, list specific entity names mentioned (companies, products, people, technologies). If not relevant, use an empty array.
-
-IMPORTANT: When relevant is true, summary MUST be non-empty and tags MUST be non-empty. Every response MUST include all three fields.`,
-    prompt: `Topic: ${topic.name}\nDescription: ${topic.description}\n\nArticle text:\n${articleText}`,
+    system: buildSystemPrompt(),
+    prompt: buildUserPrompt(topic, articleText),
   });
 
   const parsed = JSON.parse(response.text);

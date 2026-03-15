@@ -405,7 +405,7 @@ describe("assessor", () => {
 
     // The prompt should contain truncated text (max 4000 chars)
     expect(prompt.length).toBeLessThanOrEqual(
-      4000 + 100, // 100 char buffer for prompt prefix
+      4000 + 200, // buffer for prompt template overhead (topic name, description, instructions)
     );
   });
 
