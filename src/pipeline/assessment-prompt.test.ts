@@ -3,10 +3,18 @@ import { describe, expect, test } from "vitest";
 import { buildSystemPrompt, buildUserPrompt } from "./assessment-prompt";
 
 describe("buildSystemPrompt", () => {
-  const prompt = buildSystemPrompt();
+  const topic = {
+    name: "Real World Data",
+    description: "Articles about sources of real world data for clinical trials.",
+  };
+  const prompt = buildSystemPrompt(topic);
 
   test("defines role as market intelligence analyst", () => {
     expect(prompt).toContain("market intelligence analyst");
+  });
+
+  test("includes topic name in role", () => {
+    expect(prompt).toContain("focused on Real World Data");
   });
 
   test("establishes high bar for relevance", () => {

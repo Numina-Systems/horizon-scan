@@ -24,7 +24,7 @@ async function callLlmForAssessment(
 ): Promise<AssessmentOutput> {
   const response = await generateText({
     model,
-    system: buildSystemPrompt(),
+    system: buildSystemPrompt(topic),
     prompt: buildUserPrompt(topic, articleText),
   });
 

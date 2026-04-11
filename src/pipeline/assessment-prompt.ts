@@ -8,12 +8,14 @@ type AssessmentTopic = {
   readonly description: string;
 };
 
-const ROLE = [
-  "You are a senior market intelligence analyst performing horizon scanning",
-  "for a professional research digest. Your job is to determine whether an",
-  "article is directly relevant to a specific topic and, if so, extract the",
-  "key information a specialist would need.",
-].join(" ");
+function buildRole(topicName: string): string {
+  return [
+    "You are a senior market intelligence analyst performing horizon scanning",
+    `for a professional research digest focused on ${topicName}. Your job is`,
+    "to determine whether an article is directly relevant to this topic and,",
+    "if so, extract the key information a specialist would need.",
+  ].join(" ");
+}
 
 const RELEVANCE_CRITERIA = [
   "Relevance criteria (high bar):",
@@ -60,8 +62,8 @@ const OUTPUT_FORMAT = [
   "Every response MUST include all three fields.",
 ].join("\n");
 
-export function buildSystemPrompt(): string {
-  return [ROLE, RELEVANCE_CRITERIA, SUMMARY_RULES, TAG_RULES, OUTPUT_FORMAT].join(
+export function buildSystemPrompt(topic: AssessmentTopic): string {
+  return [buildRole(topic.name), RELEVANCE_CRITERIA, SUMMARY_RULES, TAG_RULES, OUTPUT_FORMAT].join(
     "\n\n",
   );
 }
