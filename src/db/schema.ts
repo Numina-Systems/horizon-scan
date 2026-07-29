@@ -34,7 +34,7 @@ export const articles = sqliteTable(
     feedId: integer("feed_id")
       .notNull()
       .references(() => feeds.id),
-    guid: text("guid").notNull().unique(),
+    guid: text("guid").notNull(),
     title: text("title"),
     url: text("url").notNull(),
     publishedAt: integer("published_at", { mode: "timestamp" }),
@@ -58,6 +58,10 @@ export const articles = sqliteTable(
   (table) => ({
     feedIdIdx: index("articles_feed_id_idx").on(table.feedId),
     statusIdx: index("articles_status_idx").on(table.status),
+    feedGuidUnique: uniqueIndex("articles_feed_id_guid_unique").on(
+      table.feedId,
+      table.guid,
+    ),
   }),
 );
 

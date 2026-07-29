@@ -94,6 +94,7 @@ describe("createPollScheduler", () => {
     vi.mocked(pollFeed).mockResolvedValue({
       feedName: "Test",
       items: [],
+      skippedItems: [],
       error: null,
     });
 
@@ -153,11 +154,13 @@ describe("createPollScheduler", () => {
       .mockResolvedValueOnce({
         feedName: "Feed 1 (fails)",
         items: [],
+        skippedItems: [],
         error: "Network error",
       })
       .mockResolvedValueOnce({
         feedName: "Feed 2 (succeeds)",
         items: [testItem],
+        skippedItems: [],
         error: null,
       });
 
@@ -208,11 +211,13 @@ describe("createPollScheduler", () => {
       .mockResolvedValueOnce({
         feedName: "Feed 1",
         items: [testItem],
+        skippedItems: [],
         error: null,
       })
       .mockResolvedValueOnce({
         feedName: "Feed 2",
         items: [],
+        skippedItems: [],
         error: null,
       });
 
@@ -268,6 +273,7 @@ describe("createPollScheduler", () => {
     vi.mocked(pollFeed).mockResolvedValue({
       feedName: "Test Feed",
       items: [],
+      skippedItems: [],
       error: null,
     });
 
@@ -309,6 +315,7 @@ describe("createPollScheduler", () => {
     vi.mocked(pollFeed).mockResolvedValue({
       feedName: "Test Feed",
       items: [],
+      skippedItems: [],
       error: null,
     });
 
@@ -358,6 +365,7 @@ describe("createPollScheduler", () => {
     vi.mocked(pollFeed).mockResolvedValue({
       feedName: "Test",
       items: [],
+      skippedItems: [],
       error: null,
     });
 
@@ -401,6 +409,7 @@ describe("createPollScheduler", () => {
     vi.mocked(pollFeed).mockResolvedValue({
       feedName: "Test Feed",
       items: [],
+      skippedItems: [],
       error: null,
     });
 
@@ -425,7 +434,7 @@ describe("createPollScheduler", () => {
     });
     vi.mocked(pollFeed).mockImplementationOnce(async () => {
       await pollDeferred;
-      return { feedName: "Test Feed", items: [], error: null };
+      return { feedName: "Test Feed", items: [], skippedItems: [], error: null };
     });
 
     // Create a REAL tRPC caller — NOT mocking triggerPollCycle.
@@ -466,7 +475,7 @@ describe("createPollScheduler", () => {
     });
     vi.mocked(pollFeed).mockImplementationOnce(async () => {
       await pollDeferred;
-      return { feedName: "Test", items: [], error: null };
+      return { feedName: "Test", items: [], skippedItems: [], error: null };
     });
 
     createPollScheduler(db, testConfig, logger);
