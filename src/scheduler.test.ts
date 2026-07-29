@@ -627,7 +627,7 @@ describe("drainScheduler", () => {
     });
     vi.mocked(pollFeed).mockImplementationOnce(async () => {
       await pollDeferred;
-      return { feedName: "Test", items: [], error: null };
+      return { feedName: "Test", items: [], skippedItems: [], error: null };
     });
 
     createPollScheduler(db, testConfig, logger);
