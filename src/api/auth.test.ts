@@ -16,9 +16,9 @@ import { createApiServer, resolvePrincipal, resolveBindHost } from "./server";
 import pino from "pino";
 
 // S1: Mock the scheduler so system.triggerPoll resolves cleanly without
-// network/LLM access. Using undefined (void) as the mock return value.
+// network/LLM access. Using { triggered: true } as the mock return value.
 vi.mock("../scheduler", () => ({
-  runPollCycle: vi.fn().mockResolvedValue(undefined),
+  triggerPollCycle: vi.fn().mockResolvedValue({ triggered: true }),
 }));
 
 // --- Shared test helpers ---

@@ -586,4 +586,137 @@ describe("assessor", () => {
     // Verify generateText was not called (article excluded by retry count filter)
     expect(vi.mocked(generateText)).not.toHaveBeenCalled();
   });
+
+  it("should prevent duplicate via ON CONFLICT when concurrent insert races during LLM call (AC.C.3)", async () => {
+    const topicId = db.insert(topics)
+      .values({
+        name: "AI Safety",
+        description: "AI alignment and safety research",
+        enabled: true,
+      })
+      .returning({ id: topics.id })
+      .get().id;
+
+    const articleId = db.insert(articles)
+      .values({
+        feedId: 1,
+        guid: "race-test-1",
+        title: "Test Article",
+        url: "https://example.com/article",
+        status: "pending_assessment",
+        extractedText: "Some article text for assessment",
+        assessmentRetryCount: 0,
+      })
+      .returning({ id: articles.id })
+      .get().id;
+
+    // Create a deferred LLM mock — we control when it resolves.
+    // This gives us the async window between the pre-check SELECT and the INSERT.
+    let resolveLlm: (value: { text: string }) => void;
+    const llmDeferred = new Promise<{ text: string }>((resolve) => {
+      resolveLlm = resolve;
+    });
+    vi.mocked(generateText).mockReturnValueOnce(llmDeferred as any);
+
+    // Start assessPendingArticles. It will:
+    //   1. SELECT pending articles (finds our article)
+    //   2. SELECT active topics (finds our topic)
+    //   3. For the article-topic pair:
+    //      a. Pre-check SELECT — no assessment exists → passes (continues)
+    //      b. LLM call — blocks on our deferred (async window opens)
+    const assessmentPromise = assessPendingArticles(db, mockModel, config, mockLogger);
+
+    // Wait for the LLM to be called — proves we're in the race window
+    await vi.waitFor(() => {
+      expect(vi.mocked(generateText)).toHaveBeenCalledTimes(1);
+    });
+
+    // SIMULATE A CONCURRENT CYCLE: while the LLM call is pending,
+    // insert the same article-topic pair directly via Drizzle.
+    db.insert(assessments)
+      .values({
+        articleId,
+        topicId,
+        relevant: true,
+        summary: "Concurrent assessment (winner of race)",
+        tags: ["concurrent"],
+        modelUsed: "other-cycle",
+        provider: "anthropic",
+        assessedAt: new Date(),
+      })
+      .run();
+
+    // Resolve the LLM mock — assessPendingArticles proceeds to INSERT.
+    // The INSERT now conflicts with the row we just inserted.
+    resolveLlm!({
+      text: JSON.stringify({
+        relevant: false,
+        summary: "Late assessment (loser of race)",
+        tags: ["late"],
+      }),
+    });
+
+    // Wait for assessPendingArticles to complete
+    await assessmentPromise;
+
+    // ASSERT: ON CONFLICT DO NOTHING prevented the duplicate.
+    const allAssessments = db.select().from(assessments).all();
+    expect(allAssessments).toHaveLength(1);
+    expect(allAssessments[0]!.summary).toBe("Concurrent assessment (winner of race)");
+    expect(allAssessments[0]!.relevant).toBe(true);
+    expect(allAssessments[0]!.modelUsed).toBe("other-cycle");
+  });
+
+  it("should enforce unique constraint at DB level for (articleId, topicId) (AC.C.3 schema)", () => {
+    const topicId = db.insert(topics)
+      .values({
+        name: "Schema Test Topic",
+        description: "Schema constraint test",
+        enabled: true,
+      })
+      .returning({ id: topics.id })
+      .get().id;
+
+    const articleId = db.insert(articles)
+      .values({
+        feedId: 1,
+        guid: "schema-test-1",
+        title: "Schema Test Article",
+        url: "https://example.com/article",
+        status: "pending_assessment",
+        extractedText: "Test content",
+      })
+      .returning({ id: articles.id })
+      .get().id;
+
+    // Insert first assessment
+    db.insert(assessments)
+      .values({
+        articleId,
+        topicId,
+        relevant: true,
+        summary: "First",
+        tags: [],
+        modelUsed: "test",
+        provider: "test",
+        assessedAt: new Date(),
+      })
+      .run();
+
+    // Raw duplicate INSERT (without onConflictDoNothing) must throw — proving the constraint exists
+    expect(() => {
+      db.insert(assessments)
+        .values({
+          articleId,
+          topicId,
+          relevant: false,
+          summary: "Second",
+          tags: [],
+          modelUsed: "test",
+          provider: "test",
+          assessedAt: new Date(),
+        })
+        .run();
+    }).toThrow();
+  });
 });

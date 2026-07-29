@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // ---------- JSON column types ----------
@@ -91,6 +91,14 @@ export const assessments = sqliteTable(
   (table) => ({
     articleIdIdx: index("assessments_article_id_idx").on(table.articleId),
     topicIdIdx: index("assessments_topic_id_idx").on(table.topicId),
+    // Unique constraint on (article_id, topic_id) prevents duplicate assessments
+    // from concurrent poll cycles. Pre-migration cleanup (cleanupDuplicateAssessments
+    // in src/db/index.ts, called from src/index.ts before migrate()) removes any
+    // existing duplicates before this index is created.
+    articleTopicUnique: uniqueIndex("assessments_article_id_topic_id_unique").on(
+      table.articleId,
+      table.topicId,
+    ),
   }),
 );
 

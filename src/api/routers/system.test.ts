@@ -9,7 +9,7 @@ import {
 import type { AppDatabase } from "../../db";
 
 vi.mock("../../scheduler", () => ({
-  runPollCycle: vi.fn().mockResolvedValue(undefined),
+  triggerPollCycle: vi.fn(),
 }));
 
 describe("system router", () => {
@@ -17,8 +17,13 @@ describe("system router", () => {
   let caller: ReturnType<typeof createTestCaller>;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetAllMocks();
     db = createTestDatabase();
-    caller = createTestCaller(db);
+    caller = createTestCaller(db, undefined, {
+      authKey: "test-key",
+      principal: { id: "admin", role: "admin" },
+    });
   });
 
   it("should return system status with config data (AC5.3)", async () => {
@@ -66,24 +71,32 @@ describe("system router", () => {
 
   it("should return digestCron as raw cron expression string (AC5.3)", async () => {
     const baseConfig = createTestConfig();
-    const customCaller = createTestCaller(db, {
-      schedule: {
-        ...baseConfig.schedule,
-        digest: "0 18 * * 1-5",
+    const customCaller = createTestCaller(
+      db,
+      {
+        schedule: {
+          ...baseConfig.schedule,
+          digest: "0 18 * * 1-5",
+        },
       },
-    });
+      { authKey: "test-key", principal: { id: "admin", role: "admin" } },
+    );
 
     const result = await customCaller.system.status();
     expect(result.digestCron).toBe("0 18 * * 1-5");
   });
 
   it("should return LLM provider and model from config (AC5.3)", async () => {
-    const customCaller = createTestCaller(db, {
-      llm: {
-        provider: "openai",
-        model: "gpt-4",
+    const customCaller = createTestCaller(
+      db,
+      {
+        llm: {
+          provider: "openai",
+          model: "gpt-4",
+        },
       },
-    });
+      { authKey: "test-key", principal: { id: "admin", role: "admin" } },
+    );
 
     const result = await customCaller.system.status();
     expect(result.provider).toBe("openai");
@@ -91,11 +104,25 @@ describe("system router", () => {
   });
 
   it("should trigger a poll cycle and return triggered:true", async () => {
-    const { runPollCycle } = await import("../../scheduler");
+    const { triggerPollCycle } = await import("../../scheduler");
+    vi.mocked(triggerPollCycle).mockResolvedValueOnce({ triggered: true });
 
     const result = await caller.system.triggerPoll();
 
     expect(result).toEqual({ triggered: true });
-    expect(vi.mocked(runPollCycle)).toHaveBeenCalledOnce();
+    expect(vi.mocked(triggerPollCycle)).toHaveBeenCalledOnce();
+  });
+
+  it("should return triggered:false when poll is already running (AC.C.1)", async () => {
+    const { triggerPollCycle } = await import("../../scheduler");
+    vi.mocked(triggerPollCycle).mockResolvedValueOnce({
+      triggered: false,
+      reason: "already-running",
+    });
+
+    const result = await caller.system.triggerPoll();
+
+    expect(result).toEqual({ triggered: false, reason: "already-running" });
+    expect(vi.mocked(triggerPollCycle)).toHaveBeenCalledOnce();
   });
 });

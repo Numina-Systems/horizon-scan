@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `assessments_article_id_topic_id_unique` ON `assessments` (`article_id`,`topic_id`);

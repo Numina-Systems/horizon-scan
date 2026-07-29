@@ -5,7 +5,7 @@ import type { AppConfig } from "./config";
 import type { PollScheduler } from "./scheduler";
 import { createLogger } from "./logger";
 import { loadConfig } from "./config";
-import { createDatabase } from "./db";
+import { createDatabase, cleanupDuplicateAssessments } from "./db";
 import { createLlmClient } from "./llm/client";
 import { createEmbeddingModel } from "./embedding";
 import { seedDatabase } from "./seed";
@@ -40,6 +40,17 @@ async function main(): Promise<void> {
   );
 
   const { db, sqlite, close: closeDb } = createDatabase(resolve(DATABASE_URL));
+
+  // Clean up any duplicate assessments before running migrations.
+  // Ensures the CREATE UNIQUE INDEX migration never fails on dirty data.
+  // Becomes a no-op once the unique index is in place.
+  const cleaned = cleanupDuplicateAssessments(sqlite);
+  if (cleaned > 0) {
+    logger.warn(
+      { duplicatesRemoved: cleaned },
+      "pre-migration cleanup: removed duplicate assessments",
+    );
+  }
 
   sqlite.pragma("foreign_keys = OFF");
   migrate(db, { migrationsFolder: resolve("./drizzle") });

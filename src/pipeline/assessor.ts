@@ -123,7 +123,11 @@ export async function assessPendingArticles(
         // Call LLM with structured output
         const result = await callLlmForAssessment(model, topic, truncatedText);
 
-        // Insert assessment into database
+        // Insert assessment into database.
+        // ON CONFLICT DO NOTHING is the correctness backstop: if a concurrent cycle
+        // inserted the same (articleId, topicId) pair between our pre-check SELECT
+        // and this INSERT, the insert silently does nothing. The pre-check SELECT
+        // above remains as the fast-path optimization that avoids wasted LLM calls.
         const now = new Date();
         const insertData = {
           articleId: article.articleId,
@@ -135,7 +139,12 @@ export async function assessPendingArticles(
           provider: config.llm.provider,
           assessedAt: now,
         };
-        db.insert(assessments).values(insertData).run();
+        db.insert(assessments)
+          .values(insertData)
+          .onConflictDoNothing({
+            target: [assessments.articleId, assessments.topicId],
+          })
+          .run();
 
         logger.debug(
           {

@@ -29,6 +29,13 @@
       "when": 1773255717390,
       "tag": "0003_good_prodigy",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785294728598,
+      "tag": "0004_steady_spectrum",
+      "breakpoints": true
     }
   ]
 }
