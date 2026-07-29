@@ -16,4 +16,19 @@ export type AppContext = {
   readonly logger: Logger;
   readonly model: LanguageModel | null;
   readonly embeddingModel: EmbeddingModel | null;
+  /**
+   * Runtime-injected API key for authentication and authorization.
+   * NOT from Zod-validated config — injected from process.env at server
+   * creation time (F2). When undefined, the API runs in unauthenticated
+   * dev mode.
+   */
+  readonly authKey?: string;
+  /**
+   * Per-request resolved principal. Must ONLY be set by resolvePrincipal()
+   * in server.ts — never by application code. Undefined when no key is
+   * configured (dev mode) or when auth fails. When present, carries the
+   * authorized role (AC-1: security boundary — do not set this field
+   * outside of the HTTP auth extraction layer).
+   */
+  readonly principal?: { id: string; role: "admin" };
 };

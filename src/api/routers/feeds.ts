@@ -1,6 +1,6 @@
 // pattern: Imperative Shell
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { feeds } from "../../db/schema";
 import { eq } from "drizzle-orm";
 
@@ -23,7 +23,7 @@ export const feedsRouter = router({
         .get();
     }),
 
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -45,7 +45,7 @@ export const feedsRouter = router({
         .get();
     }),
 
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         id: z.number(),
@@ -72,7 +72,7 @@ export const feedsRouter = router({
         .get();
     }),
 
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(({ ctx, input }) => {
       ctx.db.delete(feeds).where(eq(feeds.id, input.id)).run();

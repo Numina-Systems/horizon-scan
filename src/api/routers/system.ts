@@ -1,5 +1,5 @@
 // pattern: Imperative Shell
-import { router, publicProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { feeds, topics } from "../../db/schema";
 import { sql, desc } from "drizzle-orm";
 import { runPollCycle } from "../../scheduler";
@@ -38,7 +38,7 @@ export const systemRouter = router({
     };
   }),
 
-  triggerPoll: publicProcedure.mutation(async ({ ctx }) => {
+  triggerPoll: protectedProcedure.mutation(async ({ ctx }) => {
     await runPollCycle(ctx.db, ctx.config, ctx.logger, {
       model: ctx.model,
       embeddingModel: ctx.embeddingModel,

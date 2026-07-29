@@ -11,7 +11,7 @@ import { createEmbeddingModel } from "./embedding";
 import { seedDatabase } from "./seed";
 import { createPollScheduler, createDigestScheduler } from "./scheduler";
 import { createMailgunSender } from "./digest/sender";
-import { createApiServer } from "./api/server";
+import { createApiServer, resolveBindHost } from "./api/server";
 import { registerShutdownHandlers } from "./lifecycle";
 
 const CONFIG_PATH = process.env["CONFIG_PATH"] ?? "./config.yaml";
@@ -104,9 +104,30 @@ async function main(): Promise<void> {
 
   registerShutdownHandlers({ schedulers, closeDb, logger });
 
-  const app = createApiServer({ db, config, logger, model, embeddingModel });
-  app.listen(PORT, () => {
-    logger.info({ port: PORT }, "api server listening");
+  // --- API authentication key (F2, F4) ---
+  // Read from env with trim to handle whitespace edge cases (F4).
+  // API key is a runtime secret — NOT merged into Zod-validated config.
+  const apiAuthKey = process.env["API_KEY"]?.trim();
+
+  if (!apiAuthKey) {
+    logger.warn(
+      "API_KEY not set — API running in unauthenticated dev mode. " +
+        "Set API_KEY to require authentication for mutations.",
+    );
+  }
+
+  // --- Bind host resolution (R1, F1) ---
+  // Default: 127.0.0.1 (loopback, per AC.A.5). The service is only reachable
+  // from the local machine unless explicitly overridden.
+  // Docker sets BIND_HOST=0.0.0.0 in docker-compose.yml for port mapping.
+  const bindHost = resolveBindHost(config);
+
+  const app = createApiServer(
+    { db, config, logger, model, embeddingModel },
+    apiAuthKey, // F2: separate parameter, not merged into config
+  );
+  app.listen(PORT, bindHost, () => {
+    logger.info({ port: PORT, host: bindHost }, "api server listening");
   });
 }
 

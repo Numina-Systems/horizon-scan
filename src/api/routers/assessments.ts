@@ -1,6 +1,6 @@
 // pattern: Imperative Shell
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { articles, assessments } from "../../db/schema";
 import { eq, and, inArray, or } from "drizzle-orm";
 
@@ -46,7 +46,7 @@ export const assessmentsRouter = router({
         .all();
     }),
 
-  reassess: publicProcedure
+  reassess: protectedProcedure
     .input(
       z.object({
         articleId: z.number().optional(),

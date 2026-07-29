@@ -58,6 +58,11 @@ export const appConfigSchema = z.object({
       defaultLookbackDays: z.number().int().positive().default(15),
     })
     .default({}),
+  api: z
+    .object({
+      bindHost: z.string().trim().min(1).optional(),
+    })
+    .optional(),
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;

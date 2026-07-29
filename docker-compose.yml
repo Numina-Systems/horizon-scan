@@ -4,6 +4,8 @@ services:
     env_file:
       - .env
     ports:
+      # Port mapping works because BIND_HOST=0.0.0.0 is set above.
+      # The application defaults to 127.0.0.1 (loopback) without it.
       - "3001:3001"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
@@ -13,6 +15,12 @@ services:
       - CONFIG_PATH=/app/config.yaml
       - PORT=3001
       - LOG_LEVEL=info
+      # Bind host — explicitly set to 0.0.0.0 for Docker port mapping.
+      # The application defaults to 127.0.0.1 (loopback); this override
+      # makes the service reachable from outside the container.
+      - BIND_HOST=0.0.0.0
+      # Authentication — uncomment and set to require API key for mutations:
+      # - API_KEY=your-secret-key-here
       # LLM provider keys — uncomment and set as needed:
       # - ANTHROPIC_API_KEY=
       # - OPENAI_API_KEY=

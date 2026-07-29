@@ -182,21 +182,45 @@ export function createTestConfig(): AppConfig {
 }
 
 /**
+ * Auth options for test callers.
+ * - authKey: Set to enable auth enforcement. Omit for dev mode.
+ * - principal: Set to simulate an authenticated/authorized principal.
+ *   Omit (with authKey set) to simulate an unauthenticated request under enforcement.
+ */
+export type TestAuthOptions = {
+  authKey?: string;
+  principal?: { id: string; role: "admin" };
+};
+
+/**
  * Creates a fully-typed tRPC caller for testing router procedures directly.
- * Accepts optional config overrides for custom test scenarios.
+ * Accepts optional config overrides and auth options for custom test scenarios.
  * @param db - The AppDatabase instance to use.
  * @param configOverrides - Optional partial AppConfig to override defaults.
+ * @param authOptions - Optional auth context for testing protected procedures.
+ *   - { authKey: "key", principal: { id: "...", role: "admin" } } → authenticated caller
+ *   - { authKey: "key" } (no principal) → unauthenticated caller under enforcement
+ *   - omitted → dev mode (no enforcement)
  * @returns A typed caller function that can invoke router procedures.
  */
 export function createTestCaller(
   db: AppDatabase,
   configOverrides?: Partial<AppConfig>,
+  authOptions?: TestAuthOptions,
 ) {
   const createCaller = createCallerFactory(appRouter);
   const config = { ...createTestConfig(), ...configOverrides };
   const logger = pino({ level: "silent" });
 
-  return createCaller({ db, config, logger, model: null, embeddingModel: null });
+  return createCaller({
+    db,
+    config,
+    logger,
+    model: null,
+    embeddingModel: null,
+    authKey: authOptions?.authKey,
+    principal: authOptions?.principal,
+  });
 }
 
 /**
