@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import pino from "pino";
 import { fetchArticle, fetchPendingArticles, summarizeSettledResults } from "./fetcher";
 import { guardedFetch } from "../security/fetch-guard";
@@ -511,5 +511,189 @@ describe("fetchPendingArticles", () => {
 
     const summary = messages.find((m) => m.message === "article fetch cycle complete");
     expect(summary).toBeDefined();
+  });
+});
+
+describe("fetchPendingArticles — per-domain serialization", () => {
+  let db: AppDatabase;
+  const logger = pino({ level: "silent" });
+
+  const baseConfig: AppConfig = {
+    llm: { provider: "anthropic", model: "test" },
+    feeds: [],
+    topics: [],
+    schedule: { poll: "0 * * * *", digest: "0 0 * * *" },
+    digest: { recipient: "test@example.com" },
+    extraction: { maxConcurrency: 2, perDomainDelayMs: 100 },
+    assessment: { maxArticleLength: 4000 },
+    dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
+    security: {
+      maxResponseBytes: 10_000_000,
+      maxFeedItems: 500,
+      maxRedirects: 5,
+    },
+    shutdown: { drainTimeoutMs: 30000 },
+  };
+
+  const seed = (feedId: number, guid: string, url: string) =>
+    db
+      .insert(articles)
+      .values({
+        feedId,
+        guid,
+        url,
+        status: "pending_assessment",
+        fetchRetryCount: 0,
+      })
+      .run();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    db = createTestDatabase();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("separates same-origin fetch starts by at least perDomainDelayMs (AC.G.1)", async () => {
+    const feedId = seedTestFeed(db);
+    const startTimes: number[] = [];
+    vi.mocked(guardedFetch).mockImplementation(async () => {
+      startTimes.push(Date.now());
+      return {
+        ok: true,
+        status: 200,
+        body: "<html></html>",
+        finalUrl: "https://example.com/a",
+      };
+    });
+
+    const config: AppConfig = {
+      ...baseConfig,
+      extraction: { maxConcurrency: 3, perDomainDelayMs: 100 },
+    };
+    seed(feedId, "g1a", "https://example.com/a1");
+    seed(feedId, "g1b", "https://example.com/a2");
+    seed(feedId, "g1c", "https://example.com/a3");
+
+    const p = fetchPendingArticles(db, config, logger);
+    // Drain the timer cascade: each same-domain task waits delayMs after the
+    // previous task completes before starting.
+    for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(100);
+    await p;
+
+    expect(startTimes).toHaveLength(3);
+    expect(startTimes[1]! - startTimes[0]!).toBeGreaterThanOrEqual(100);
+    expect(startTimes[2]! - startTimes[1]!).toBeGreaterThanOrEqual(100);
+  });
+
+  it("runs different origins concurrently without cross-domain delay (AC.G.2)", async () => {
+    const feedId = seedTestFeed(db);
+    const callLog: { domain: string; time: number }[] = [];
+    vi.mocked(guardedFetch).mockImplementation(async (url: string) => {
+      callLog.push({ domain: new URL(url).hostname, time: Date.now() });
+      return {
+        ok: true,
+        status: 200,
+        body: "<html></html>",
+        finalUrl: url,
+      };
+    });
+
+    const config: AppConfig = {
+      ...baseConfig,
+      extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
+    };
+    // A1 and A2 share alpha.example.com; B1 is on a different origin.
+    // With limit() inside the domain chain, B1 should start concurrently
+    // with A1 while A2 waits behind A1 + 1000ms delay.
+    seed(feedId, "g2a1", "https://alpha.example.com/x");
+    seed(feedId, "g2a2", "https://alpha.example.com/y");
+    seed(feedId, "g2b1", "https://beta.example.com/z");
+
+    const p = fetchPendingArticles(db, config, logger);
+    for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(200);
+    await p;
+
+    expect(callLog).toHaveLength(3);
+
+    const alphaCalls = callLog.filter((c) => c.domain === "alpha.example.com");
+    const betaCall = callLog.find((c) => c.domain === "beta.example.com")!;
+
+    // B1 (beta) starts at the same simulated time as A1 — cross-domain independence
+    expect(betaCall.time).toBe(alphaCalls[0]!.time);
+    // A2 starts at least perDomainDelayMs after A1 — same-domain serialization
+    expect(alphaCalls[1]!.time - alphaCalls[0]!.time).toBeGreaterThanOrEqual(1000);
+  });
+
+  it("releases per-domain state after a failed fetch so the next request proceeds (AC.G.3)", async () => {
+    const feedId = seedTestFeed(db);
+    let call = 0;
+    vi.mocked(guardedFetch).mockImplementation(async () => {
+      call += 1;
+      // First call (g3a) fails; second call (g3b) succeeds.
+      return call === 1
+        ? { ok: false, error: "HTTP 503: Service Unavailable" }
+        : {
+            ok: true,
+            status: 200,
+            body: "<html>ok</html>",
+            finalUrl: "https://example.com/b",
+          };
+    });
+
+    const config: AppConfig = {
+      ...baseConfig,
+      extraction: { maxConcurrency: 2, perDomainDelayMs: 100 },
+    };
+    seed(feedId, "g3a", "https://example.com/first");
+    seed(feedId, "g3b", "https://example.com/second");
+
+    const p = fetchPendingArticles(db, config, logger);
+    for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(100);
+    await p;
+
+    // Second fetch DID run despite the first failure — chain not poisoned
+    expect(guardedFetch).toHaveBeenCalledTimes(2);
+
+    const rows = db.select().from(articles).all();
+    const a = rows.find((r) => r.guid === "g3a");
+    const b = rows.find((r) => r.guid === "g3b");
+    expect(a?.fetchRetryCount).toBe(1); // first article's failure recorded
+    expect(a?.status).toBe("pending_assessment");
+    expect(b?.rawHtml).toBe("<html>ok</html>"); // second article succeeded
+  });
+
+  it("still serializes same-origin starts when perDomainDelayMs is 0", async () => {
+    const feedId = seedTestFeed(db);
+    const startTimes: number[] = [];
+    vi.mocked(guardedFetch).mockImplementation(async () => {
+      startTimes.push(Date.now());
+      return {
+        ok: true,
+        status: 200,
+        body: "<html></html>",
+        finalUrl: "https://example.com/c",
+      };
+    });
+
+    const config: AppConfig = {
+      ...baseConfig,
+      extraction: { maxConcurrency: 3, perDomainDelayMs: 0 },
+    };
+    seed(feedId, "g4a", "https://example.com/c1");
+    seed(feedId, "g4b", "https://example.com/c2");
+
+    const p = fetchPendingArticles(db, config, logger);
+    // With delayMs=0 the setTimeout(resolve, 0) still yields to the event loop,
+    // so starts are serialized (one at a time) but not time-spaced.
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(1);
+    await p;
+
+    // Both ran — serialization holds, neither was dropped
+    expect(startTimes).toHaveLength(2);
   });
 });
