@@ -39,6 +39,18 @@ const digestFlight = createSingleFlight();
 let activePollPromise: Promise<unknown> | null = null;
 let activeDigestPromise: Promise<unknown> | null = null;
 
+/**
+ * Shutdown admission gate. When true, triggerPollCycle refuses new work.
+ * Set by setShuttingDown() at the start of the shutdown sequence (before
+ * stopping schedulers or closing HTTP) to prevent in-flight requests from
+ * starting new poll cycles after drain has already captured the active state.
+ */
+let isShuttingDown = false;
+
+export function setShuttingDown(): void {
+  isShuttingDown = true;
+}
+
 // ---------------------------------------------------------------------------
 // PRIVATE lock wrapper functions (F5)
 // ---------------------------------------------------------------------------
@@ -132,7 +144,8 @@ export function drainScheduler(): Promise<void> {
   const promises: Array<Promise<unknown>> = [];
   if (activePollPromise !== null) promises.push(activePollPromise);
   if (activeDigestPromise !== null) promises.push(activeDigestPromise);
-  return Promise.all(promises).then(() => undefined);
+  if (promises.length === 0) return Promise.resolve();
+  return Promise.allSettled(promises).then(() => undefined);
 }
 
 export type PollScheduler = {
@@ -259,6 +272,9 @@ export async function triggerPollCycle(
   logger: Logger,
   pipeline?: PipelineDeps,
 ): Promise<{ triggered: boolean; reason?: string }> {
+  if (isShuttingDown) {
+    return { triggered: false, reason: "shutting-down" };
+  }
   return withPollLock(
     () => runPollCycle(db, config, logger, pipeline),
     logger,

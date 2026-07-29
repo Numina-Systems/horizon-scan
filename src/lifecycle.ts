@@ -1,6 +1,7 @@
 // pattern: Imperative Shell
 import type { Logger } from "pino";
 import type { Server } from "node:http";
+import { setShuttingDown } from "./scheduler";
 
 /**
  * Represents an object with a stop method for graceful shutdown.
@@ -49,6 +50,11 @@ export function registerShutdownHandlers(
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
+
+    // Phase 0: Set shutdown admission gate BEFORE anything else.
+    // This prevents in-flight HTTP requests from starting new poll cycles
+    // after drain has already captured the active state.
+    setShuttingDown();
 
     deps.logger.info({ signal }, "shutdown signal received");
 
