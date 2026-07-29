@@ -372,4 +372,87 @@ describe("deduplicateAndStore", () => {
     expect(stored).toBeDefined();
     expect(stored!.metadata).toEqual(item.metadata);
   });
+
+  it("should allow same GUID across different feeds (AC.E.2)", () => {
+    const db = createTestDatabase();
+    const feed1 = seedTestFeed(db, { name: "Feed 1" });
+    const feed2 = seedTestFeed(db, { name: "Feed 2" });
+
+    const item: ParsedRssItem = {
+      guid: "shared-guid",
+      title: "Wire service article",
+      url: "https://example.com/wire-article",
+      publishedAt: new Date("2024-01-01T00:00:00Z"),
+      metadata: {},
+    };
+
+    // Insert into feed 1
+    const result1 = deduplicateAndStore(db, feed1, "Feed 1", [item], logger);
+    expect(result1.newCount).toBe(1);
+    expect(result1.skippedCount).toBe(0);
+
+    // Same GUID inserted into feed 2 — should NOT be a duplicate
+    const result2 = deduplicateAndStore(db, feed2, "Feed 2", [item], logger);
+    expect(result2.newCount).toBe(1);
+    expect(result2.skippedCount).toBe(0);
+
+    // Both articles exist
+    const allArticles = db.select().from(articles).all();
+    expect(allArticles).toHaveLength(2);
+    expect(allArticles[0]!.feedId).toBe(feed1);
+    expect(allArticles[1]!.feedId).toBe(feed2);
+    expect(allArticles[0]!.guid).toBe("shared-guid");
+    expect(allArticles[1]!.guid).toBe("shared-guid");
+  });
+
+  it("should deduplicate same GUID within the same feed (AC.E.4)", () => {
+    const db = createTestDatabase();
+    const feedId = seedTestFeed(db);
+
+    const item: ParsedRssItem = {
+      guid: "feed-local-dup",
+      title: "Same article",
+      url: "https://example.com/article",
+      publishedAt: new Date("2024-01-01T00:00:00Z"),
+      metadata: {},
+    };
+
+    const result1 = deduplicateAndStore(db, feedId, "Test Feed", [item], logger);
+    expect(result1.newCount).toBe(1);
+    expect(result1.skippedCount).toBe(0);
+
+    const result2 = deduplicateAndStore(db, feedId, "Test Feed", [item], logger);
+    expect(result2.newCount).toBe(0);
+    expect(result2.skippedCount).toBe(1);
+
+    const allArticles = db.select().from(articles).all();
+    expect(allArticles).toHaveLength(1);
+  });
+
+  it("should enforce composite unique constraint at DB level for same feed+guid", () => {
+    const db = createTestDatabase();
+    const feedId = seedTestFeed(db);
+
+    const item: ParsedRssItem = {
+      guid: "constraint-test",
+      title: "Article",
+      url: "https://example.com/article",
+      publishedAt: null,
+      metadata: {},
+    };
+
+    // First insert succeeds
+    deduplicateAndStore(db, feedId, "Test Feed", [item], logger);
+
+    // Direct insert bypassing dedup should throw (constraint enforcement)
+    expect(() => {
+      db.insert(articles).values({
+        feedId,
+        guid: "constraint-test",
+        title: "Duplicate",
+        url: "https://example.com/dup",
+        status: "pending_dedup",
+      }).run();
+    }).toThrow();
+  });
 });

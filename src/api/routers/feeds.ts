@@ -1,8 +1,10 @@
 // pattern: Imperative Shell
 import { z } from "zod";
-import { router, publicProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { feeds } from "../../db/schema";
 import { eq } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { validateOutboundUrl } from "../../security/url-validator";
 
 /**
  * tRPC router for managing feeds.
@@ -23,7 +25,7 @@ export const feedsRouter = router({
         .get();
     }),
 
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -37,7 +39,14 @@ export const feedsRouter = router({
         enabled: z.boolean().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const validation = await validateOutboundUrl(input.url);
+      if (!validation.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Feed URL rejected: ${validation.reason}`,
+        });
+      }
       return ctx.db
         .insert(feeds)
         .values(input)
@@ -45,7 +54,7 @@ export const feedsRouter = router({
         .get();
     }),
 
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         id: z.number(),
@@ -62,7 +71,16 @@ export const feedsRouter = router({
         enabled: z.boolean().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      if (input.url !== undefined) {
+        const validation = await validateOutboundUrl(input.url);
+        if (!validation.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Feed URL rejected: ${validation.reason}`,
+          });
+        }
+      }
       const { id, ...updates } = input;
       return ctx.db
         .update(feeds)
@@ -72,7 +90,7 @@ export const feedsRouter = router({
         .get();
     }),
 
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(({ ctx, input }) => {
       ctx.db.delete(feeds).where(eq(feeds.id, input.id)).run();

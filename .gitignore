@@ -5,3 +5,6 @@ dist/
 *.db-wal
 data/
 .env
+.current-epic/
+.worktrees/
+.current-task/

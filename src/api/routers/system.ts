@@ -1,8 +1,8 @@
 // pattern: Imperative Shell
-import { router, publicProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { feeds, topics } from "../../db/schema";
 import { sql, desc } from "drizzle-orm";
-import { runPollCycle } from "../../scheduler";
+import { triggerPollCycle } from "../../scheduler";
 
 /**
  * tRPC router for system health and status.
@@ -38,11 +38,10 @@ export const systemRouter = router({
     };
   }),
 
-  triggerPoll: publicProcedure.mutation(async ({ ctx }) => {
-    await runPollCycle(ctx.db, ctx.config, ctx.logger, {
+  triggerPoll: protectedProcedure.mutation(async ({ ctx }) => {
+    return triggerPollCycle(ctx.db, ctx.config, ctx.logger, {
       model: ctx.model,
       embeddingModel: ctx.embeddingModel,
     });
-    return { triggered: true };
   }),
 });

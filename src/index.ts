@@ -5,13 +5,13 @@ import type { AppConfig } from "./config";
 import type { PollScheduler } from "./scheduler";
 import { createLogger } from "./logger";
 import { loadConfig } from "./config";
-import { createDatabase } from "./db";
+import { createDatabase, cleanupDuplicateAssessments } from "./db";
 import { createLlmClient } from "./llm/client";
 import { createEmbeddingModel } from "./embedding";
 import { seedDatabase } from "./seed";
-import { createPollScheduler, createDigestScheduler } from "./scheduler";
+import { createPollScheduler, createDigestScheduler, drainScheduler } from "./scheduler";
 import { createMailgunSender } from "./digest/sender";
-import { createApiServer } from "./api/server";
+import { createApiServer, resolveBindHost } from "./api/server";
 import { registerShutdownHandlers } from "./lifecycle";
 
 const CONFIG_PATH = process.env["CONFIG_PATH"] ?? "./config.yaml";
@@ -40,6 +40,17 @@ async function main(): Promise<void> {
   );
 
   const { db, sqlite, close: closeDb } = createDatabase(resolve(DATABASE_URL));
+
+  // Clean up any duplicate assessments before running migrations.
+  // Ensures the CREATE UNIQUE INDEX migration never fails on dirty data.
+  // Becomes a no-op once the unique index is in place.
+  const cleaned = cleanupDuplicateAssessments(sqlite);
+  if (cleaned > 0) {
+    logger.warn(
+      { duplicatesRemoved: cleaned },
+      "pre-migration cleanup: removed duplicate assessments",
+    );
+  }
 
   sqlite.pragma("foreign_keys = OFF");
   migrate(db, { migrationsFolder: resolve("./drizzle") });
@@ -102,11 +113,42 @@ async function main(): Promise<void> {
     ? [pollScheduler, digestScheduler]
     : [pollScheduler];
 
-  registerShutdownHandlers({ schedulers, closeDb, logger });
+  // --- API authentication key (F2, F4) ---
+  // Read from env with trim to handle whitespace edge cases (F4).
+  // API key is a runtime secret — NOT merged into Zod-validated config.
+  const apiAuthKey = process.env["API_KEY"]?.trim();
 
-  const app = createApiServer({ db, config, logger, model, embeddingModel });
-  app.listen(PORT, () => {
-    logger.info({ port: PORT }, "api server listening");
+  if (!apiAuthKey) {
+    logger.warn(
+      "API_KEY not set — API running in unauthenticated dev mode. " +
+        "Set API_KEY to require authentication for mutations.",
+    );
+  }
+
+  // --- Bind host resolution (R1, F1) ---
+  // Default: 127.0.0.1 (loopback, per AC.A.5). The service is only reachable
+  // from the local machine unless explicitly overridden.
+  // Docker sets BIND_HOST=0.0.0.0 in docker-compose.yml for port mapping.
+  const bindHost = resolveBindHost(config);
+
+  const app = createApiServer(
+    { db, config, logger, model, embeddingModel },
+    apiAuthKey, // F2: separate parameter, not merged into config
+  );
+
+  // Start listening and capture the http.Server instance for graceful shutdown.
+  const httpServer = app.listen(PORT, bindHost, () => {
+    logger.info({ port: PORT, host: bindHost }, "api server listening");
+  });
+
+  // Register shutdown handlers — must come AFTER app.listen so httpServer is available.
+  registerShutdownHandlers({
+    schedulers,
+    closeDb,
+    logger,
+    httpServer,
+    drain: drainScheduler,
+    drainTimeoutMs: config.shutdown.drainTimeoutMs,
   });
 }
 

@@ -8,9 +8,15 @@ export type ParsedRssItem = {
   readonly metadata: RssItemMetadata;
 };
 
+export type SkippedItem = {
+  readonly title: string | null;
+  readonly reason: string;
+};
+
 export type PollResult = {
   readonly feedName: string;
   readonly items: ReadonlyArray<ParsedRssItem>;
+  readonly skippedItems: ReadonlyArray<SkippedItem>;
   readonly error: string | null;
 };
 

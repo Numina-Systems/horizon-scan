@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Logger } from "pino";
 import { articles } from "../db/schema";
 import type { AppDatabase } from "../db";
@@ -18,7 +18,7 @@ export function deduplicateAndStore(
     const existing = db
       .select({ id: articles.id })
       .from(articles)
-      .where(eq(articles.guid, item.guid))
+      .where(and(eq(articles.feedId, feedId), eq(articles.guid, item.guid)))
       .get();
 
     if (existing) {

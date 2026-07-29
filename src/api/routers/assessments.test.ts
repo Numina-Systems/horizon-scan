@@ -74,11 +74,12 @@ describe("assessments router", () => {
     const feedId = seedTestFeed(db);
     const article1Id = seedTestArticle(db, feedId);
     const article2Id = seedTestArticle(db, feedId);
-    const topicId = seedTestTopic(db);
+    const topic1Id = seedTestTopic(db, { name: "Topic 1" });
+    const topic2Id = seedTestTopic(db, { name: "Topic 2" });
 
-    seedTestAssessment(db, article1Id, topicId, { relevant: true });
-    seedTestAssessment(db, article1Id, topicId, { relevant: false });
-    seedTestAssessment(db, article2Id, topicId, { relevant: true });
+    seedTestAssessment(db, article1Id, topic1Id, { relevant: true });
+    seedTestAssessment(db, article1Id, topic2Id, { relevant: false });
+    seedTestAssessment(db, article2Id, topic1Id, { relevant: true });
 
     const result = await caller.assessments.list({ articleId: article1Id });
     expect(result).toHaveLength(2);
@@ -103,11 +104,12 @@ describe("assessments router", () => {
     const feedId = seedTestFeed(db);
     const article1Id = seedTestArticle(db, feedId);
     const article2Id = seedTestArticle(db, feedId);
-    const topicId = seedTestTopic(db);
+    const topic1Id = seedTestTopic(db, { name: "Topic 1" });
+    const topic2Id = seedTestTopic(db, { name: "Topic 2" });
 
-    seedTestAssessment(db, article1Id, topicId, { relevant: true });
-    seedTestAssessment(db, article1Id, topicId, { relevant: false });
-    seedTestAssessment(db, article2Id, topicId, { relevant: true });
+    seedTestAssessment(db, article1Id, topic1Id, { relevant: true });
+    seedTestAssessment(db, article1Id, topic2Id, { relevant: false });
+    seedTestAssessment(db, article2Id, topic1Id, { relevant: true });
 
     const result = await caller.assessments.list({
       articleId: article1Id,
@@ -181,16 +183,17 @@ describe("assessments router", () => {
     const feedId = seedTestFeed(db);
     const article1Id = seedTestArticle(db, feedId);
     const article2Id = seedTestArticle(db, feedId);
-    const topicId = seedTestTopic(db);
+    const topic1Id = seedTestTopic(db, { name: "Topic 1" });
+    const topic2Id = seedTestTopic(db, { name: "Topic 2" });
 
-    seedTestAssessment(db, article1Id, topicId, { relevant: true, summary: "Assessment 1" });
-    seedTestAssessment(db, article1Id, topicId, { relevant: false, summary: "Assessment 2" });
-    seedTestAssessment(db, article2Id, topicId, { relevant: true, summary: "Assessment 3" });
+    seedTestAssessment(db, article1Id, topic1Id, { relevant: true, summary: "Assessment 1" });
+    seedTestAssessment(db, article1Id, topic2Id, { relevant: false, summary: "Assessment 2" });
+    seedTestAssessment(db, article2Id, topic1Id, { relevant: true, summary: "Assessment 3" });
 
     const result = await caller.assessments.getByArticle({ articleId: article1Id });
     expect(result).toHaveLength(2);
     expect(result.every((a) => a.articleId === article1Id)).toBe(true);
-    expect(result.map((a) => a.summary)).toEqual([
+    expect(result.map((a) => a.summary).sort()).toEqual([
       "Assessment 1",
       "Assessment 2",
     ]);

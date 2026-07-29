@@ -6,6 +6,7 @@ import type { LanguageModel, EmbeddingModel } from "ai";
 import type { AppDatabase } from "./db";
 import type { AppConfig } from "./config";
 import { feeds } from "./db/schema";
+import { createSingleFlight } from "./concurrency/single-flight";
 import { pollFeed } from "./pipeline/poller";
 import { deduplicateAndStore } from "./pipeline/dedup";
 import { processPendingDedup, fallbackPendingDedup } from "./pipeline/embedding-dedup";
@@ -14,6 +15,138 @@ import { extractPendingArticles } from "./pipeline/extract-articles";
 import { assessPendingArticles } from "./pipeline/assessor";
 import { runDigestCycle } from "./digest/orchestrator";
 import type { SendDigestFn } from "./digest/sender";
+
+// ---------------------------------------------------------------------------
+// Module-level single-flight locks (PRIVATE — not exported, not injectable)
+// ---------------------------------------------------------------------------
+// These are intentionally module-private singletons. Both the scheduler cron
+// callbacks and the triggerPollCycle function share the same lock instance.
+// Node.js single-threaded execution makes synchronous tryAcquire() race-free.
+//
+// There is NO resetSingleFlight(), NO lock parameter, and NO way to inject or
+// override these locks from outside the module. Tests use vi.resetModules() to
+// get fresh module instances with fresh singletons.
+//
+// Task D (NSY-5) will add Promise tracking inside the private wrappers below.
+// ---------------------------------------------------------------------------
+
+const pollFlight = createSingleFlight();
+const digestFlight = createSingleFlight();
+
+// --- TASK D (NSY-5): Promise tracking ---
+// These track the in-flight Promise so shutdown can await completion.
+// Set by withPollLock/withDigestLock, cleared in their finally blocks.
+let activePollPromise: Promise<unknown> | null = null;
+let activeDigestPromise: Promise<unknown> | null = null;
+
+/**
+ * Shutdown admission gate. When true, triggerPollCycle refuses new work.
+ * Set by setShuttingDown() at the start of the shutdown sequence (before
+ * stopping schedulers or closing HTTP) to prevent in-flight requests from
+ * starting new poll cycles after drain has already captured the active state.
+ */
+let isShuttingDown = false;
+
+export function setShuttingDown(): void {
+  isShuttingDown = true;
+}
+
+// ---------------------------------------------------------------------------
+// PRIVATE lock wrapper functions (F5)
+// ---------------------------------------------------------------------------
+// withPollLock and withDigestLock centralize the try-acquire/try-finally/release
+// pattern. They are NOT exported. Task D (NSY-5) has minimal edit points here —
+// it only needs to add Promise tracking inside these two functions.
+//
+// --- TASK D EDIT POINT (NSY-5) ---
+// Task D: add Promise tracking here. Set activePollPromise before calling fn,
+// clear it in the finally block. Export drainPoll() that awaits activePollPromise.
+// ---------------------------------------------------------------------------
+
+/**
+ * PRIVATE: Wraps a function in the poll single-flight lock.
+ * Returns { triggered: false } if the lock is already held, otherwise runs the
+ * function and returns { triggered: true }. The lock is ALWAYS released via
+ * finally, even on error.
+ */
+async function withPollLock<T extends () => Promise<void>>(
+  fn: T,
+  logger: Logger,
+): Promise<{ triggered: boolean; reason?: string }> {
+  if (!pollFlight.tryAcquire()) {
+    logger.warn("poll cycle skipped — another poll already running");
+    return { triggered: false, reason: "already-running" };
+  }
+
+  // NSY-5: Track the in-flight Promise for drainScheduler() to await.
+  // We wrap the entire try/finally in a single async IIFE so the Promise
+  // includes both fn() execution AND the finally cleanup (release).
+  const promise = (async () => {
+    try {
+      await fn();
+      return { triggered: true } as const;
+    } finally {
+      pollFlight.release();
+    }
+  })();
+
+  activePollPromise = promise;
+  try {
+    return await promise;
+  } finally {
+    activePollPromise = null;
+  }
+}
+
+/**
+ * PRIVATE: Wraps a function in the digest single-flight lock.
+ * Returns false if the lock is already held, otherwise runs the function and
+ * returns true. The lock is ALWAYS released via finally, even on error.
+ *
+ * --- TASK D EDIT POINT (NSY-5) ---
+ * Task D: add Promise tracking here. Same pattern as withPollLock.
+ */
+async function withDigestLock<T extends () => Promise<void>>(
+  fn: T,
+  logger: Logger,
+): Promise<boolean> {
+  if (!digestFlight.tryAcquire()) {
+    logger.warn("digest cycle skipped — another digest already running");
+    return false;
+  }
+
+  // NSY-5: Track the in-flight Promise for drainScheduler() to await.
+  const promise = (async () => {
+    try {
+      await fn();
+      return true;
+    } finally {
+      digestFlight.release();
+    }
+  })();
+
+  activeDigestPromise = promise;
+  try {
+    return await promise;
+  } finally {
+    activeDigestPromise = null;
+  }
+}
+
+/**
+ * Returns a Promise that resolves when all active pipeline work (poll + digest)
+ * completes, or resolves immediately if no work is active.
+ *
+ * Used by the shutdown handler to drain in-flight work before closing the DB.
+ * Safe to call when idle (returns Promise.resolve()).
+ */
+export function drainScheduler(): Promise<void> {
+  const promises: Array<Promise<unknown>> = [];
+  if (activePollPromise !== null) promises.push(activePollPromise);
+  if (activeDigestPromise !== null) promises.push(activeDigestPromise);
+  if (promises.length === 0) return Promise.resolve();
+  return Promise.allSettled(promises).then(() => undefined);
+}
 
 export type PollScheduler = {
   readonly stop: () => void;
@@ -26,20 +159,11 @@ export type PipelineDeps = {
 };
 
 /**
- * Creates and starts a scheduler that polls feeds on the configured cron schedule.
- * Runs the full pipeline: poll → dedup → embedding-dedup → fetch → extract → assess.
- *
- * @param db - The application database connection
- * @param config - Application configuration including schedule.poll cron expression
- * @param logger - Logger instance for recording poll events
- * @param pipeline - Optional pipeline dependencies (LLM model for assessment, embedding model for dedup)
- * @returns A PollScheduler with a stop() method to halt the scheduled polling
- */
-/**
  * Runs a single poll cycle: poll → dedup → embedding-dedup → fetch → extract → assess.
- * Extracted so it can be called by both the cron scheduler and the manual trigger endpoint.
+ * PRIVATE — not exported. Use triggerPollCycle as the sole entry point for
+ * triggering poll cycles from outside this module.
  */
-export async function runPollCycle(
+async function runPollCycle(
   db: AppDatabase,
   config: AppConfig,
   logger: Logger,
@@ -55,7 +179,14 @@ export async function runPollCycle(
 
   for (const feed of enabledFeeds) {
     try {
-      const pollResult = await pollFeed(feed.name, feed.url, logger);
+      const pollResult = await pollFeed(
+        feed.name,
+        feed.url,
+        logger,
+        config.security.maxFeedItems,
+        config.security.maxResponseBytes,
+        config.security.maxRedirects,
+      );
 
       if (pollResult.error) {
         logger.warn(
@@ -128,6 +259,38 @@ export async function runPollCycle(
   logger.info("poll cycle complete");
 }
 
+/**
+ * Attempts to trigger a poll cycle. Returns { triggered: false } if a poll
+ * is already running (single-flight protection).
+ *
+ * Uses the private withPollLock wrapper, which uses the module-level pollFlight
+ * singleton. There is no lock parameter — the singleton is the only lock.
+ */
+export async function triggerPollCycle(
+  db: AppDatabase,
+  config: AppConfig,
+  logger: Logger,
+  pipeline?: PipelineDeps,
+): Promise<{ triggered: boolean; reason?: string }> {
+  if (isShuttingDown) {
+    return { triggered: false, reason: "shutting-down" };
+  }
+  return withPollLock(
+    () => runPollCycle(db, config, logger, pipeline),
+    logger,
+  );
+}
+
+/**
+ * Creates and starts a scheduler that polls feeds on the configured cron schedule.
+ * Runs the full pipeline: poll → dedup → embedding-dedup → fetch → extract → assess.
+ *
+ * @param db - The application database connection
+ * @param config - Application configuration including schedule.poll cron expression
+ * @param logger - Logger instance for recording poll events
+ * @param pipeline - Optional pipeline dependencies (LLM model for assessment, embedding model for dedup)
+ * @returns A PollScheduler with a stop() method to halt the scheduled polling
+ */
 export function createPollScheduler(
   db: AppDatabase,
   config: AppConfig,
@@ -137,7 +300,17 @@ export function createPollScheduler(
   const task: ScheduledTask = cron.schedule(
     config.schedule.poll,
     async () => {
-      await runPollCycle(db, config, logger, pipeline);
+      await withPollLock(
+        async () => {
+          try {
+            await runPollCycle(db, config, logger, pipeline);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error({ error: message }, "poll cycle failed unexpectedly");
+          }
+        },
+        logger,
+      );
     },
   );
 
@@ -166,12 +339,17 @@ export function createDigestScheduler(
   const task: ScheduledTask = cron.schedule(
     config.schedule.digest,
     async () => {
-      try {
-        await runDigestCycle(db, config, sendDigest, logger);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.error({ error: message }, "digest cycle failed unexpectedly");
-      }
+      await withDigestLock(
+        async () => {
+          try {
+            await runDigestCycle(db, config, sendDigest, logger);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error({ error: message }, "digest cycle failed unexpectedly");
+          }
+        },
+        logger,
+      );
     },
   );
 
