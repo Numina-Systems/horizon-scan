@@ -23,6 +23,7 @@ const testConfig: AppConfig = {
   extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
   assessment: { maxArticleLength: 4000 },
   dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
+  shutdown: { drainTimeoutMs: 30000 },
 };
 
 const mockSendDigest: SendDigestFn = vi.fn();
@@ -580,5 +581,96 @@ describe("createDigestScheduler", () => {
     // Run again — lock was released despite the inner error
     await capturedDigestCallback!();
     expect(vi.mocked(runDigestCycle)).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("drainScheduler", () => {
+  let db: AppDatabase;
+  let capturedCallback: (() => Promise<void>) | null = null;
+  let mockTaskStop: ReturnType<typeof vi.fn> | null = null;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    db = createTestDatabase();
+    vi.clearAllMocks();
+    capturedCallback = null;
+    mockTaskStop = null;
+
+    const cronModule = await import("node-cron");
+    mockTaskStop = vi.fn();
+
+    vi.mocked(cronModule.default.schedule).mockImplementation(
+      (expression: string, callback: any) => {
+        capturedCallback = callback;
+        return {
+          stop: mockTaskStop,
+        } as any;
+      },
+    );
+  });
+
+  it("drainScheduler resolves immediately when no work is active", async () => {
+    const { drainScheduler } = await import("./scheduler");
+    await expect(drainScheduler()).resolves.toBeUndefined();
+  });
+
+  it("drainScheduler awaits active poll cycle", async () => {
+    const { createPollScheduler, drainScheduler } = await import("./scheduler");
+    const { pollFeed } = await import("./pipeline/poller");
+
+    const logger = pino({ level: "silent" });
+    seedTestFeed(db, { enabled: true });
+
+    let resolvePoll: () => void;
+    const pollDeferred = new Promise<void>((resolve) => {
+      resolvePoll = resolve;
+    });
+    vi.mocked(pollFeed).mockImplementationOnce(async () => {
+      await pollDeferred;
+      return { feedName: "Test", items: [], error: null };
+    });
+
+    createPollScheduler(db, testConfig, logger);
+
+    // Start the cron callback — acquires lock, blocks on pollDeferred
+    const cronPromise = capturedCallback!();
+    await vi.waitFor(() => {
+      expect(vi.mocked(pollFeed)).toHaveBeenCalledTimes(1);
+    });
+
+    // drainScheduler should not resolve while poll is in-flight
+    let drainResolved = false;
+    const drainPromise = drainScheduler().then(() => {
+      drainResolved = true;
+    });
+
+    // Yield to event loop — drain should NOT resolve yet
+    await new Promise<void>((r) => setTimeout(r, 10));
+    expect(drainResolved).toBe(false);
+
+    // Release poll — drain should now resolve
+    resolvePoll!();
+    await cronPromise;
+    await drainPromise;
+    expect(drainResolved).toBe(true);
+  });
+
+  it("drainScheduler resolves after error in poll cycle", async () => {
+    const { triggerPollCycle, drainScheduler } = await import("./scheduler");
+
+    const logger = pino({ level: "silent" });
+    const brokenDb = {
+      select: vi.fn(() => {
+        throw new Error("db closed");
+      }),
+    } as any;
+
+    // triggerPollCycle rejects, but withPollLock releases the lock via finally
+    await expect(
+      triggerPollCycle(brokenDb, testConfig, logger),
+    ).rejects.toThrow("db closed");
+
+    // drainScheduler should resolve immediately — no active work
+    await expect(drainScheduler()).resolves.toBeUndefined();
   });
 });

@@ -63,6 +63,11 @@ export const appConfigSchema = z.object({
       bindHost: z.string().trim().min(1).optional(),
     })
     .optional(),
+  shutdown: z
+    .object({
+      drainTimeoutMs: z.number().int().positive().default(30000),
+    })
+    .default({}),
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;

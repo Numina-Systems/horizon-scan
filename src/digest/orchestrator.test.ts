@@ -67,6 +67,9 @@ const mockConfig: AppConfig = {
     similarityThreshold: 0.9,
     defaultLookbackDays: 15,
   },
+  shutdown: {
+    drainTimeoutMs: 30000,
+  },
 };
 
 describe("runDigestCycle", () => {

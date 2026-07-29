@@ -135,6 +135,7 @@ describe("fetchPendingArticles", () => {
     extraction: { maxConcurrency: 2, perDomainDelayMs: 100 },
     assessment: { maxArticleLength: 4000 },
     dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
+    shutdown: { drainTimeoutMs: 30000 },
   };
 
   beforeEach(() => {

@@ -9,7 +9,7 @@ import { createDatabase, cleanupDuplicateAssessments } from "./db";
 import { createLlmClient } from "./llm/client";
 import { createEmbeddingModel } from "./embedding";
 import { seedDatabase } from "./seed";
-import { createPollScheduler, createDigestScheduler } from "./scheduler";
+import { createPollScheduler, createDigestScheduler, drainScheduler } from "./scheduler";
 import { createMailgunSender } from "./digest/sender";
 import { createApiServer, resolveBindHost } from "./api/server";
 import { registerShutdownHandlers } from "./lifecycle";
@@ -113,8 +113,6 @@ async function main(): Promise<void> {
     ? [pollScheduler, digestScheduler]
     : [pollScheduler];
 
-  registerShutdownHandlers({ schedulers, closeDb, logger });
-
   // --- API authentication key (F2, F4) ---
   // Read from env with trim to handle whitespace edge cases (F4).
   // API key is a runtime secret — NOT merged into Zod-validated config.
@@ -137,8 +135,20 @@ async function main(): Promise<void> {
     { db, config, logger, model, embeddingModel },
     apiAuthKey, // F2: separate parameter, not merged into config
   );
-  app.listen(PORT, bindHost, () => {
+
+  // Start listening and capture the http.Server instance for graceful shutdown.
+  const httpServer = app.listen(PORT, bindHost, () => {
     logger.info({ port: PORT, host: bindHost }, "api server listening");
+  });
+
+  // Register shutdown handlers — must come AFTER app.listen so httpServer is available.
+  registerShutdownHandlers({
+    schedulers,
+    closeDb,
+    logger,
+    httpServer,
+    drain: drainScheduler,
+    drainTimeoutMs: config.shutdown.drainTimeoutMs,
   });
 }
 

@@ -33,6 +33,12 @@ import type { SendDigestFn } from "./digest/sender";
 const pollFlight = createSingleFlight();
 const digestFlight = createSingleFlight();
 
+// --- TASK D (NSY-5): Promise tracking ---
+// These track the in-flight Promise so shutdown can await completion.
+// Set by withPollLock/withDigestLock, cleared in their finally blocks.
+let activePollPromise: Promise<unknown> | null = null;
+let activeDigestPromise: Promise<unknown> | null = null;
+
 // ---------------------------------------------------------------------------
 // PRIVATE lock wrapper functions (F5)
 // ---------------------------------------------------------------------------
@@ -59,11 +65,24 @@ async function withPollLock<T extends () => Promise<void>>(
     logger.warn("poll cycle skipped — another poll already running");
     return { triggered: false, reason: "already-running" };
   }
+
+  // NSY-5: Track the in-flight Promise for drainScheduler() to await.
+  // We wrap the entire try/finally in a single async IIFE so the Promise
+  // includes both fn() execution AND the finally cleanup (release).
+  const promise = (async () => {
+    try {
+      await fn();
+      return { triggered: true } as const;
+    } finally {
+      pollFlight.release();
+    }
+  })();
+
+  activePollPromise = promise;
   try {
-    await fn();
-    return { triggered: true };
+    return await promise;
   } finally {
-    pollFlight.release();
+    activePollPromise = null;
   }
 }
 
@@ -83,12 +102,37 @@ async function withDigestLock<T extends () => Promise<void>>(
     logger.warn("digest cycle skipped — another digest already running");
     return false;
   }
+
+  // NSY-5: Track the in-flight Promise for drainScheduler() to await.
+  const promise = (async () => {
+    try {
+      await fn();
+      return true;
+    } finally {
+      digestFlight.release();
+    }
+  })();
+
+  activeDigestPromise = promise;
   try {
-    await fn();
-    return true;
+    return await promise;
   } finally {
-    digestFlight.release();
+    activeDigestPromise = null;
   }
+}
+
+/**
+ * Returns a Promise that resolves when all active pipeline work (poll + digest)
+ * completes, or resolves immediately if no work is active.
+ *
+ * Used by the shutdown handler to drain in-flight work before closing the DB.
+ * Safe to call when idle (returns Promise.resolve()).
+ */
+export function drainScheduler(): Promise<void> {
+  const promises: Array<Promise<unknown>> = [];
+  if (activePollPromise !== null) promises.push(activePollPromise);
+  if (activeDigestPromise !== null) promises.push(activeDigestPromise);
+  return Promise.all(promises).then(() => undefined);
 }
 
 export type PollScheduler = {
