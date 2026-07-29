@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import pino from "pino";
-import { fetchArticle, fetchPendingArticles } from "./fetcher";
+import { fetchArticle, fetchPendingArticles, summarizeSettledResults } from "./fetcher";
 import { guardedFetch } from "../security/fetch-guard";
-import { createTestDatabase, seedTestFeed } from "../test-utils/db";
+import { createTestDatabase, seedTestFeed, createTestLoggerWithCapture } from "../test-utils/db";
 import type { AppDatabase } from "../db";
 import { articles } from "../db/schema";
 import { eq } from "drizzle-orm";
@@ -151,6 +151,55 @@ describe("fetchArticle", () => {
     if (!result.success) {
       expect(result.error).toContain("maxBytes");
     }
+  });
+});
+
+describe("summarizeSettledResults", () => {
+  it("should return all fulfilled when no rejections (AC.F.3)", () => {
+    const results: PromiseSettledResult<void>[] = [
+      { status: "fulfilled", value: undefined },
+      { status: "fulfilled", value: undefined },
+      { status: "fulfilled", value: undefined },
+    ];
+
+    const summary = summarizeSettledResults(results);
+    expect(summary.fulfilled).toBe(3);
+    expect(summary.rejected).toBe(0);
+    expect(summary.reasons).toEqual([]);
+  });
+
+  it("should count rejected and extract reasons (AC.F.3)", () => {
+    const results: PromiseSettledResult<void>[] = [
+      { status: "fulfilled", value: undefined },
+      { status: "rejected", reason: new Error("DB write failed") },
+      { status: "fulfilled", value: undefined },
+      { status: "rejected", reason: "unexpected string rejection" },
+    ];
+
+    const summary = summarizeSettledResults(results);
+    expect(summary.fulfilled).toBe(2);
+    expect(summary.rejected).toBe(2);
+    expect(summary.reasons).toHaveLength(2);
+    expect(summary.reasons[0]).toContain("DB write failed");
+    expect(summary.reasons[1]).toContain("unexpected string rejection");
+  });
+
+  it("should handle empty results array", () => {
+    const summary = summarizeSettledResults([]);
+    expect(summary.fulfilled).toBe(0);
+    expect(summary.rejected).toBe(0);
+    expect(summary.reasons).toEqual([]);
+  });
+
+  it("should safely stringify non-Error rejection reasons", () => {
+    const results: PromiseSettledResult<void>[] = [
+      { status: "rejected", reason: 42 },
+      { status: "rejected", reason: undefined },
+    ];
+
+    const summary = summarizeSettledResults(results);
+    expect(summary.rejected).toBe(2);
+    expect(summary.reasons).toEqual(["42", "undefined"]);
   });
 });
 
@@ -316,5 +365,151 @@ describe("fetchPendingArticles", () => {
     await fetchPendingArticles(db, mockConfig, logger);
 
     expect(guardedFetch).not.toHaveBeenCalled();
+  });
+
+  it("should mark article as failed when URL is malformed (AC.F.1, AC.F.2)", async () => {
+    const feedId = seedTestFeed(db);
+
+    db.insert(articles)
+      .values({
+        feedId,
+        guid: "malformed-url-article",
+        url: "not-a-valid-url",
+        status: "pending_assessment",
+        fetchRetryCount: 0,
+      })
+      .run();
+
+    await fetchPendingArticles(db, mockConfig, logger);
+
+    const article = db.select().from(articles).get();
+    expect(article?.status).toBe("failed");
+    expect(article?.fetchRetryCount).toBe(3); // MAX_RETRIES
+    expect(guardedFetch).not.toHaveBeenCalled();
+  });
+
+  it("should mark article as failed when URL is empty string (AC.F.1)", async () => {
+    const feedId = seedTestFeed(db);
+
+    db.insert(articles)
+      .values({
+        feedId,
+        guid: "empty-url-article",
+        url: "",
+        status: "pending_assessment",
+        fetchRetryCount: 0,
+      })
+      .run();
+
+    await fetchPendingArticles(db, mockConfig, logger);
+
+    const article = db.select().from(articles).get();
+    expect(article?.status).toBe("failed");
+    expect(article?.fetchRetryCount).toBe(3);
+  });
+
+  it("should process valid articles even when batch contains malformed URLs (AC.F.4)", async () => {
+    const feedId = seedTestFeed(db);
+
+    // Article with malformed URL
+    db.insert(articles)
+      .values({
+        feedId,
+        guid: "malformed-in-batch",
+        url: "://broken-url",
+        status: "pending_assessment",
+        fetchRetryCount: 0,
+      })
+      .run();
+
+    // Article with valid URL
+    db.insert(articles)
+      .values({
+        feedId,
+        guid: "valid-in-batch",
+        url: "https://example.com/valid-article",
+        status: "pending_assessment",
+        fetchRetryCount: 0,
+      })
+      .run();
+
+    vi.mocked(guardedFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: "<html><body>Valid content</body></html>",
+      finalUrl: "https://example.com/valid-article",
+    });
+
+    await fetchPendingArticles(db, mockConfig, logger);
+
+    const allArticles = db.select().from(articles).all();
+    const malformed = allArticles.find((a) => a.guid === "malformed-in-batch");
+    const valid = allArticles.find((a) => a.guid === "valid-in-batch");
+
+    // Malformed article failed
+    expect(malformed?.status).toBe("failed");
+    expect(malformed?.fetchRetryCount).toBe(3);
+
+    // Valid article fetched successfully
+    expect(valid?.status).toBe("pending_assessment");
+    expect(valid?.rawHtml).toBe("<html><body>Valid content</body></html>");
+    expect(valid?.fetchRetryCount).toBe(0);
+  });
+
+  it("should log structured warning for malformed URL (AC.F.1)", async () => {
+    const feedId = seedTestFeed(db);
+    const { logger: captureLogger, getMessages } = createTestLoggerWithCapture("warn");
+
+    db.insert(articles)
+      .values({
+        feedId,
+        guid: "warn-test-article",
+        url: "ftp://[broken",
+        status: "pending_assessment",
+        fetchRetryCount: 0,
+      })
+      .run();
+
+    await fetchPendingArticles(db, mockConfig, captureLogger);
+
+    const messages = getMessages();
+    const warning = messages.find(
+      (m) => m.message === "article has malformed URL — marking as failed",
+    );
+    expect(warning).toBeDefined();
+    expect(warning?.level).toBe("warn");
+  });
+
+  it("should not log rejection warning when all tasks fulfill (AC.F.3)", async () => {
+    const feedId = seedTestFeed(db);
+    const { logger: captureLogger, getMessages } = createTestLoggerWithCapture();
+
+    db.insert(articles)
+      .values({
+        feedId,
+        guid: "clean-article",
+        url: "https://example.com/clean",
+        status: "pending_assessment",
+        fetchRetryCount: 0,
+      })
+      .run();
+
+    vi.mocked(guardedFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: "<html>Clean</html>",
+      finalUrl: "https://example.com/clean",
+    });
+
+    await fetchPendingArticles(db, mockConfig, captureLogger);
+
+    const messages = getMessages();
+    const warning = messages.find(
+      (m) => m.level === "warn" && m.message.includes("rejected"),
+    );
+    expect(warning).toBeUndefined();
+
+    const summary = messages.find((m) => m.message === "article fetch cycle complete");
+    expect(summary).toBeDefined();
   });
 });

@@ -53,6 +53,26 @@ const MAX_RETRIES = 3;
 const FETCH_TIMEOUT_MS = 15_000;
 
 /**
+ * Summarises the results of `Promise.allSettled` for logging purposes.
+ * Pure function — no side effects, directly unit-testable.
+ */
+export function summarizeSettledResults(
+  results: PromiseSettledResult<void>[],
+): { fulfilled: number; rejected: number; reasons: string[] } {
+  const reasons: string[] = [];
+  let rejected = 0;
+
+  for (const r of results) {
+    if (r.status === "rejected") {
+      rejected++;
+      reasons.push(String(r.reason));
+    }
+  }
+
+  return { fulfilled: results.length - rejected, rejected, reasons };
+}
+
+/**
  * Fetches pending articles from the database with concurrency limiting and per-domain delay.
  * Updates articles with raw HTML on success or increments retry count on failure.
  * Articles exceeding MAX_RETRIES are marked as failed.
@@ -91,7 +111,24 @@ export async function fetchPendingArticles(
 
   const tasks = pending.map((article) =>
     limit(async () => {
-      const domain = new URL(article.url).hostname;
+      // Parse URL for domain-based delay. A malformed URL is a terminal failure —
+      // retrying will never fix a syntactically invalid URL.
+      let domain: string;
+      try {
+        domain = new URL(article.url).hostname;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn(
+          { articleId: article.id, url: article.url, error: message },
+          "article has malformed URL — marking as failed",
+        );
+        db.update(articles)
+          .set({ status: "failed", fetchRetryCount: MAX_RETRIES })
+          .where(eq(articles.id, article.id))
+          .run();
+        return;
+      }
+
       const lastFetch = domainLastFetch.get(domain) ?? 0;
       const elapsed = Date.now() - lastFetch;
 
@@ -132,6 +169,23 @@ export async function fetchPendingArticles(
     }),
   );
 
-  await Promise.allSettled(tasks);
-  logger.info({ totalFetched: pending.length }, "article fetch cycle complete");
+  const results = await Promise.allSettled(tasks);
+  const summary = summarizeSettledResults(results);
+
+  if (summary.rejected > 0) {
+    logger.warn(
+      {
+        total: pending.length,
+        fulfilled: summary.fulfilled,
+        rejected: summary.rejected,
+        rejectionReasons: summary.reasons,
+      },
+      "some article fetch tasks were rejected — these may need investigation",
+    );
+  }
+
+  logger.info(
+    { total: pending.length, fulfilled: summary.fulfilled, rejected: summary.rejected },
+    "article fetch cycle complete",
+  );
 }
