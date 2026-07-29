@@ -23,6 +23,11 @@ const testConfig: AppConfig = {
   extraction: { maxConcurrency: 2, perDomainDelayMs: 1000 },
   assessment: { maxArticleLength: 4000 },
   dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
+  security: {
+    maxResponseBytes: 10_000_000,
+    maxFeedItems: 500,
+    maxRedirects: 5,
+  },
   shutdown: { drainTimeoutMs: 30000 },
 };
 
@@ -115,11 +120,17 @@ describe("createPollScheduler", () => {
         "Feed 1",
         "https://example.com/feed1",
         logger,
+        500,
+        10_000_000,
+        5,
       );
       expect(vi.mocked(pollFeed)).toHaveBeenCalledWith(
         "Feed 2",
         "https://example.com/feed2",
         logger,
+        500,
+        10_000_000,
+        5,
       );
     }
   });

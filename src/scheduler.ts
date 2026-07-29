@@ -166,7 +166,14 @@ async function runPollCycle(
 
   for (const feed of enabledFeeds) {
     try {
-      const pollResult = await pollFeed(feed.name, feed.url, logger);
+      const pollResult = await pollFeed(
+        feed.name,
+        feed.url,
+        logger,
+        config.security.maxFeedItems,
+        config.security.maxResponseBytes,
+        config.security.maxRedirects,
+      );
 
       if (pollResult.error) {
         logger.warn(

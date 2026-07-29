@@ -79,6 +79,11 @@ describe("assessor", () => {
         similarityThreshold: 0.9,
         defaultLookbackDays: 15,
       },
+      security: {
+        maxResponseBytes: 10_000_000,
+        maxFeedItems: 500,
+        maxRedirects: 5,
+      },
       shutdown: {
         drainTimeoutMs: 30000,
       },

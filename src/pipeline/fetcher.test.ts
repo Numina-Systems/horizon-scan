@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import pino from "pino";
 import { fetchArticle, fetchPendingArticles } from "./fetcher";
+import { guardedFetch } from "../security/fetch-guard";
 import { createTestDatabase, seedTestFeed } from "../test-utils/db";
 import type { AppDatabase } from "../db";
 import { articles } from "../db/schema";
 import { eq } from "drizzle-orm";
 import type { AppConfig } from "../config";
+
+vi.mock("../security/fetch-guard", () => ({
+  guardedFetch: vi.fn(),
+}));
 
 describe("fetchArticle", () => {
   const logger = pino({ level: "silent" });
@@ -15,14 +20,12 @@ describe("fetchArticle", () => {
   });
 
   it("should return success with HTML when fetch returns 200", async () => {
-    const mockResponse = {
+    vi.mocked(guardedFetch).mockResolvedValue({
       ok: true,
       status: 200,
-      statusText: "OK",
-      text: vi.fn().mockResolvedValue("<html><body>Article content</body></html>"),
-    };
-
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse));
+      body: "<html><body>Article content</body></html>",
+      finalUrl: "https://example.com/article",
+    });
 
     const result = await fetchArticle("https://example.com/article", 15000, logger);
 
@@ -34,32 +37,25 @@ describe("fetchArticle", () => {
   });
 
   it("should return failure with error message when fetch returns 403", async () => {
-    const mockResponse = {
+    vi.mocked(guardedFetch).mockResolvedValue({
       ok: false,
-      status: 403,
-      statusText: "Forbidden",
-    };
-
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse));
+      error: "HTTP 403: Forbidden",
+    });
 
     const result = await fetchArticle("https://example.com/blocked", 15000, logger);
 
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toContain("403");
-      expect(result.error).toContain("Forbidden");
       expect(result.url).toBe("https://example.com/blocked");
     }
   });
 
   it("should return failure with error message when fetch returns 404", async () => {
-    const mockResponse = {
+    vi.mocked(guardedFetch).mockResolvedValue({
       ok: false,
-      status: 404,
-      statusText: "Not Found",
-    };
-
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse));
+      error: "HTTP 404: Not Found",
+    });
 
     const result = await fetchArticle("https://example.com/missing", 15000, logger);
 
@@ -70,13 +66,10 @@ describe("fetchArticle", () => {
   });
 
   it("should return failure with error message when fetch returns 500", async () => {
-    const mockResponse = {
+    vi.mocked(guardedFetch).mockResolvedValue({
       ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-    };
-
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse));
+      error: "HTTP 500: Internal Server Error",
+    });
 
     const result = await fetchArticle("https://example.com/error", 15000, logger);
 
@@ -87,10 +80,10 @@ describe("fetchArticle", () => {
   });
 
   it("should return failure when fetch times out", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("The operation was aborted")),
-    );
+    vi.mocked(guardedFetch).mockResolvedValue({
+      ok: false,
+      error: "The operation was aborted",
+    });
 
     const result = await fetchArticle("https://example.com/slow", 15000, logger);
 
@@ -100,26 +93,64 @@ describe("fetchArticle", () => {
     }
   });
 
-  it("should set User-Agent and Accept headers on fetch request", async () => {
-    const mockResponse = {
+  it("should set User-Agent and Accept headers on guardedFetch request", async () => {
+    vi.mocked(guardedFetch).mockResolvedValue({
       ok: true,
       status: 200,
-      statusText: "OK",
-      text: vi.fn().mockResolvedValue("<html></html>"),
-    };
-
-    const mockFetch = vi.fn().mockResolvedValue(mockResponse);
-    vi.stubGlobal("fetch", mockFetch);
+      body: "<html></html>",
+      finalUrl: "https://example.com/article",
+    });
 
     await fetchArticle("https://example.com/article", 15000, logger);
 
-    expect(mockFetch).toHaveBeenCalledWith("https://example.com/article", {
-      signal: expect.any(AbortSignal),
-      headers: {
-        "User-Agent": "HorizonScan/1.0 (RSS article fetcher)",
-        Accept: "text/html,application/xhtml+xml",
-      },
+    expect(guardedFetch).toHaveBeenCalledWith(
+      "https://example.com/article",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        headers: {
+          "User-Agent": "HorizonScan/1.0 (RSS article fetcher)",
+          Accept: "text/html,application/xhtml+xml",
+        },
+      }),
+    );
+  });
+
+  it("should reject SSRF URL before connecting (AC.B.1)", async () => {
+    vi.mocked(guardedFetch).mockResolvedValue({
+      ok: false,
+      error: "URL validation failed: IP address 127.0.0.1 is in a private/reserved range",
     });
+
+    const result = await fetchArticle(
+      "http://127.0.0.1:8080/admin",
+      15000,
+      logger,
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/private|validation/);
+    }
+  });
+
+  it("should abort oversized response (AC.B.3)", async () => {
+    vi.mocked(guardedFetch).mockResolvedValue({
+      ok: false,
+      error: "response body exceeds maxBytes (100)",
+    });
+
+    const result = await fetchArticle(
+      "https://example.com/big",
+      15000,
+      logger,
+      100,
+      5,
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("maxBytes");
+    }
   });
 });
 
@@ -135,6 +166,11 @@ describe("fetchPendingArticles", () => {
     extraction: { maxConcurrency: 2, perDomainDelayMs: 100 },
     assessment: { maxArticleLength: 4000 },
     dedup: { similarityThreshold: 0.9, defaultLookbackDays: 15 },
+    security: {
+      maxResponseBytes: 10_000_000,
+      maxFeedItems: 500,
+      maxRedirects: 5,
+    },
     shutdown: { drainTimeoutMs: 30000 },
   };
 
@@ -156,13 +192,10 @@ describe("fetchPendingArticles", () => {
       })
       .run();
 
-    const mockResponse = {
+    vi.mocked(guardedFetch).mockResolvedValue({
       ok: false,
-      status: 403,
-      statusText: "Forbidden",
-    };
-
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse));
+      error: "HTTP 403: Forbidden",
+    });
 
     await fetchPendingArticles(db, mockConfig, logger);
 
@@ -184,13 +217,10 @@ describe("fetchPendingArticles", () => {
       })
       .run();
 
-    const mockResponse = {
+    vi.mocked(guardedFetch).mockResolvedValue({
       ok: false,
-      status: 403,
-      statusText: "Forbidden",
-    };
-
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse));
+      error: "HTTP 403: Forbidden",
+    });
 
     await fetchPendingArticles(db, mockConfig, logger);
 
@@ -212,12 +242,11 @@ describe("fetchPendingArticles", () => {
       })
       .run();
 
-    const mockFetch = vi.fn();
-    vi.stubGlobal("fetch", mockFetch);
+    vi.mocked(guardedFetch);
 
     await fetchPendingArticles(db, mockConfig, logger);
 
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(guardedFetch).not.toHaveBeenCalled();
   });
 
   it("should store raw HTML on successful fetch", async () => {
@@ -234,14 +263,12 @@ describe("fetchPendingArticles", () => {
       .run();
 
     const htmlContent = "<html><body>Article body</body></html>";
-    const mockResponse = {
+    vi.mocked(guardedFetch).mockResolvedValue({
       ok: true,
       status: 200,
-      statusText: "OK",
-      text: vi.fn().mockResolvedValue(htmlContent),
-    };
-
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse));
+      body: htmlContent,
+      finalUrl: "https://example.com/article4",
+    });
 
     await fetchPendingArticles(db, mockConfig, logger);
 
@@ -264,12 +291,11 @@ describe("fetchPendingArticles", () => {
       })
       .run();
 
-    const mockFetch = vi.fn();
-    vi.stubGlobal("fetch", mockFetch);
+    vi.mocked(guardedFetch);
 
     await fetchPendingArticles(db, mockConfig, logger);
 
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(guardedFetch).not.toHaveBeenCalled();
   });
 
   it("should skip articles with status other than pending_assessment", async () => {
@@ -285,11 +311,10 @@ describe("fetchPendingArticles", () => {
       })
       .run();
 
-    const mockFetch = vi.fn();
-    vi.stubGlobal("fetch", mockFetch);
+    vi.mocked(guardedFetch);
 
     await fetchPendingArticles(db, mockConfig, logger);
 
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(guardedFetch).not.toHaveBeenCalled();
   });
 });

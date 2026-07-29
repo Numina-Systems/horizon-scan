@@ -58,6 +58,13 @@ export const appConfigSchema = z.object({
       defaultLookbackDays: z.number().int().positive().default(15),
     })
     .default({}),
+  security: z
+    .object({
+      maxResponseBytes: z.number().int().positive().default(10_000_000),
+      maxFeedItems: z.number().int().positive().default(500),
+      maxRedirects: z.number().int().positive().default(5),
+    })
+    .default({}),
   api: z
     .object({
       bindHost: z.string().trim().min(1).optional(),

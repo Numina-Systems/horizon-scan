@@ -1,6 +1,7 @@
 import Parser from "rss-parser";
 import type { Logger } from "pino";
 import type { ParsedRssItem, PollResult, SkippedItem } from "./types";
+import { guardedFetch } from "../security/fetch-guard";
 
 type CustomItem = {
   prnIndustry?: string;
@@ -33,9 +34,39 @@ export async function pollFeed(
   feedName: string,
   feedUrl: string,
   logger: Logger,
+  maxFeedItems: number = 500,
+  maxResponseBytes: number = 10_000_000,
+  maxRedirects: number = 5,
 ): Promise<PollResult> {
   try {
-    const feed = await getParser().parseURL(feedUrl);
+    // Fetch feed XML via guardedFetch — gets SSRF protection (URL validation,
+    // DNS pinning, per-hop redirect validation, byte capping) that parseURL does NOT provide.
+    const fetchResult = await guardedFetch(feedUrl, {
+      maxBytes: maxResponseBytes,
+      maxRedirects,
+      headers: {
+        "User-Agent": "HorizonScan/1.0 (RSS feed poller)",
+        Accept:
+          "application/rss+xml, application/atom+xml, application/xml, text/xml",
+      },
+    });
+
+    if (!fetchResult.ok) {
+      logger.warn(
+        { feedName, feedUrl, error: fetchResult.error },
+        "feed fetch rejected by guardedFetch",
+      );
+      return {
+        feedName,
+        items: [],
+        skippedItems: [],
+        error: fetchResult.error,
+      };
+    }
+
+    // Parse the bounded XML string — rss-parser never makes a network request.
+    // This closes ALL feed SSRF gaps (redirects, byte capping, DNS pinning).
+    const feed = await getParser().parseString(fetchResult.body);
 
     const items: Array<ParsedRssItem> = [];
     const skippedItems: Array<SkippedItem> = [];
@@ -81,11 +112,27 @@ export async function pollFeed(
       });
     }
 
+    const truncatedItems =
+      items.length > maxFeedItems ? items.slice(0, maxFeedItems) : items;
+
     logger.info(
-      { feedName, itemCount: items.length, skippedCount: skippedItems.length },
+      {
+        feedName,
+        itemCount: truncatedItems.length,
+        skippedCount: skippedItems.length,
+        ...(items.length > maxFeedItems && {
+          originalCount: items.length,
+          truncated: true,
+        }),
+      },
       "feed polled successfully",
     );
-    return { feedName, items, skippedItems, error: null };
+    return {
+      feedName,
+      items: truncatedItems,
+      skippedItems,
+      error: null,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ feedName, feedUrl, error: message }, "feed poll failed");

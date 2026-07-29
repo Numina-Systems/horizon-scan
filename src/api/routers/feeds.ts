@@ -3,6 +3,8 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { feeds } from "../../db/schema";
 import { eq } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { validateOutboundUrl } from "../../security/url-validator";
 
 /**
  * tRPC router for managing feeds.
@@ -37,7 +39,14 @@ export const feedsRouter = router({
         enabled: z.boolean().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const validation = await validateOutboundUrl(input.url);
+      if (!validation.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Feed URL rejected: ${validation.reason}`,
+        });
+      }
       return ctx.db
         .insert(feeds)
         .values(input)
@@ -62,7 +71,16 @@ export const feedsRouter = router({
         enabled: z.boolean().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      if (input.url !== undefined) {
+        const validation = await validateOutboundUrl(input.url);
+        if (!validation.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Feed URL rejected: ${validation.reason}`,
+          });
+        }
+      }
       const { id, ...updates } = input;
       return ctx.db
         .update(feeds)

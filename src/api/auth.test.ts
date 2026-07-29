@@ -21,6 +21,14 @@ vi.mock("../scheduler", () => ({
   triggerPollCycle: vi.fn().mockResolvedValue({ triggered: true }),
 }));
 
+// Task B (NSY-3): Mock URL validator so feeds.create/update don't hit real DNS
+vi.mock("../security/url-validator", () => ({
+  validateOutboundUrl: vi.fn().mockResolvedValue({
+    ok: true,
+    resolvedIp: "93.184.216.34",
+  }),
+}));
+
 // --- Shared test helpers ---
 
 function seedTestData(db: AppDatabase) {

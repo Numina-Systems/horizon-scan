@@ -5,6 +5,7 @@ import pLimit from "p-limit";
 import type { AppDatabase } from "../db";
 import type { AppConfig } from "../config";
 import { articles } from "../db/schema";
+import { guardedFetch } from "../security/fetch-guard";
 
 export type FetchResult =
   | { success: true; html: string; url: string }
@@ -18,9 +19,13 @@ export async function fetchArticle(
   url: string,
   timeoutMs: number,
   logger: Logger,
+  maxResponseBytes: number = 10_000_000,
+  maxRedirects: number = 5,
 ): Promise<FetchResult> {
   try {
-    const response = await fetch(url, {
+    const result = await guardedFetch(url, {
+      maxBytes: maxResponseBytes,
+      maxRedirects,
       signal: AbortSignal.timeout(timeoutMs),
       headers: {
         "User-Agent": "HorizonScan/1.0 (RSS article fetcher)",
@@ -28,16 +33,15 @@ export async function fetchArticle(
       },
     });
 
-    if (!response.ok) {
+    if (!result.ok) {
       return {
         success: false,
-        error: `HTTP ${response.status}: ${response.statusText}`,
+        error: result.error,
         url,
       };
     }
 
-    const html = await response.text();
-    return { success: true, html, url };
+    return { success: true, html: result.body, url };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn({ url, error: message }, "article fetch failed");
@@ -99,7 +103,13 @@ export async function fetchPendingArticles(
 
       domainLastFetch.set(domain, Date.now());
 
-      const result = await fetchArticle(article.url, FETCH_TIMEOUT_MS, logger);
+      const result = await fetchArticle(
+        article.url,
+        FETCH_TIMEOUT_MS,
+        logger,
+        config.security.maxResponseBytes,
+        config.security.maxRedirects,
+      );
 
       if (result.success) {
         db.update(articles)
